@@ -106,11 +106,16 @@ function send(method, value) {
   return true;
 }
 
+function resolvePoseContentUrl(value) {
+  const parsed = new URL(value, window.location.origin);
+  return new URL(`${parsed.pathname}${parsed.search}`, window.location.origin).href;
+}
+
 async function loadPose(poseId) {
   if (!unityInstance) throw new Error("O renderizador ainda não está pronto.");
   const pose = await api(`/api/v1/poses/${encodeURIComponent(poseId)}`);
   send("SetFps", pose.fps);
-  send("LoadPoseUrl", pose.content_url);
+  send("LoadPoseUrl", resolvePoseContentUrl(pose.content_url));
   activePoseId = pose.id;
   elements.activePose.textContent = `${pose.name} · ${pose.frame_count} frames · ${pose.fps} FPS`;
   document.querySelectorAll(".pose-item").forEach((item) => {

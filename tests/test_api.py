@@ -62,6 +62,8 @@ class PoseApiTests(unittest.TestCase):
         self.assertEqual(payload["frame_count"], 1)
         self.assertEqual(payload["fps"], 25)
         self.assertIn("/content", payload["content_url"])
+        self.assertTrue(payload["content_url"].startswith("/"))
+        self.assertNotIn("://", payload["content_url"])
 
         pose_id = payload["id"]
         content = self.client.get(f"/api/v1/poses/{pose_id}/content")

@@ -9,6 +9,8 @@ let activePhrase = "";
 let processing = false;
 let toastTimer = null;
 let zoomLevel = 1;
+let poseLoadContext = null;
+let poseLoadTimer = null;
 
 const minZoom = 0.76;
 const maxZoom = 1.48;
@@ -124,7 +126,12 @@ async function initializeAvatar() {
     elements.zoomResetButton.disabled = false;
 
     if (pendingPose) {
-      playPose(pendingPose.pose, pendingPose.words, pendingPose.phrase);
+      playPose(
+        pendingPose.pose,
+        pendingPose.words,
+        pendingPose.phrase,
+        pendingPose.statusMessage,
+      );
       pendingPose = null;
     }
   } catch (error) {
@@ -220,19 +227,66 @@ function cleanWords(words) {
     .filter(Boolean);
 }
 
-function playPose(pose, words, phrase) {
+function resolvePoseContentUrl(value) {
+  const parsed = new URL(value, window.location.origin);
+  return new URL(`${parsed.pathname}${parsed.search}`, window.location.origin).href;
+}
+
+function finishPoseLoad(success, message = "") {
+  if (!poseLoadContext) return;
+  clearTimeout(poseLoadTimer);
+  const { pose, words, phrase, statusMessage } = poseLoadContext;
+  poseLoadContext = null;
+
+  if (!success) {
+    const detail = message || "A Asuna não conseguiu carregar os movimentos.";
+    updateProcessingMessage(statusMessage, {
+      title: "Falha ao carregar a pose",
+      text: detail,
+      isError: true,
+    });
+    elements.avatarCaption.textContent = "Falha ao carregar movimentos";
+    elements.avatarWords.textContent = detail;
+    elements.replayButton.disabled = true;
+    showToast(detail, true);
+    return;
+  }
+
   activePose = pose;
   activePhrase = phrase;
   const cleaned = cleanWords(words);
-  sendUnity("SetBackgroundColor", "#ffffff");
-  sendUnity("SetFps", pose.fps || 30);
-  sendUnity("LoadPoseUrl", pose.content_url);
+  const wordsLabel = cleaned.length ? cleaned.join(", ") : "nenhum sinal identificado";
+  updateProcessingMessage(statusMessage, {
+    title: "Pose pronta!",
+    text: `Frase enviada: ${phrase}\nPalavras encontradas: ${wordsLabel}`,
+  });
   elements.avatarCaption.textContent = phrase;
   elements.avatarWords.textContent = cleaned.length
-    ? `Sinais encontrados: ${cleaned.join(", ")}`
+    ? `Sinais encontrados: ${wordsLabel}`
     : "Pose pronta para reprodução.";
   elements.replayButton.disabled = false;
 }
+
+function playPose(pose, words, phrase, statusMessage) {
+  clearTimeout(poseLoadTimer);
+  activePose = null;
+  activePhrase = "";
+  poseLoadContext = { pose, words, phrase, statusMessage };
+  sendUnity("SetBackgroundColor", "#ffffff");
+  sendUnity("SetFps", pose.fps || 30);
+  sendUnity("LoadPoseUrl", resolvePoseContentUrl(pose.content_url));
+  elements.avatarCaption.textContent = "Carregando movimentos";
+  elements.avatarWords.textContent = phrase;
+  elements.replayButton.disabled = true;
+  poseLoadTimer = setTimeout(() => {
+    finishPoseLoad(false, "A Asuna não confirmou o carregamento da pose.");
+  }, 20000);
+}
+
+window.addEventListener("avatar3d-pose-load", (event) => {
+  const detail = event.detail || {};
+  finishPoseLoad(detail.status === "success", detail.message);
+});
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -243,15 +297,21 @@ async function pollTask(taskId, phrase, statusMessage) {
     try {
       const { response, payload } = await api(`/api/v1/mvp/tasks/${encodeURIComponent(taskId)}`);
       if (response.status === 202) continue;
-      const words = cleanWords(payload.palavras_encontradas);
-      const wordsLabel = words.length ? words.join(", ") : "nenhum sinal identificado";
       updateProcessingMessage(statusMessage, {
-        title: "Pose pronta!",
-        text: `Frase enviada: ${phrase}\nPalavras encontradas: ${wordsLabel}`,
+        title: "Pose recebida",
+        text: "Carregando os movimentos na Asuna...",
       });
 
-      if (unityInstance) playPose(payload.pose, payload.palavras_encontradas, phrase);
-      else pendingPose = { pose: payload.pose, words: payload.palavras_encontradas, phrase };
+      if (unityInstance) {
+        playPose(payload.pose, payload.palavras_encontradas, phrase, statusMessage);
+      } else {
+        pendingPose = {
+          pose: payload.pose,
+          words: payload.palavras_encontradas,
+          phrase,
+          statusMessage,
+        };
+      }
       return;
     } catch (error) {
       if (error.status === 502 && transientFailures < 5) {

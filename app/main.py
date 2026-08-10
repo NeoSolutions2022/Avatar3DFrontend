@@ -54,10 +54,11 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
 
 def record_response(record: PoseRecord, request: Request) -> dict:
     result = record.to_dict()
-    result["content_url"] = str(
-        request.url_for("get_pose_content", pose_id=record.id)
-    )
-    result["player_url"] = str(request.base_url).rstrip("/") + f"/?poseId={record.id}"
+    # Keep generated links safe behind TLS-terminating reverse proxies.
+    result["content_url"] = request.url_for(
+        "get_pose_content", pose_id=record.id
+    ).path
+    result["player_url"] = f"/?poseId={record.id}"
     return result
 
 
