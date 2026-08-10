@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+tests/
+data/
+.env
+webgl/index.html
+webgl/TemplateData/
+webgl/README.md

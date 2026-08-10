@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Avatar 3D da NeoTalk para reproduzir movimentos de arquivos .pose em LIBRAS."
+    />
+    <title>Avatar 3D · NeoTalk</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Avatar 3D, início">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>
+            <strong>Avatar 3D</strong>
+            <small>NeoTalk motion runtime</small>
+          </span>
+        </a>
+        <div class="connection" id="connection-status">
+          <span></span>
+          Inicializando renderizador
+        </div>
+      </header>
+
+      <section class="workspace">
+        <div class="stage-panel">
+          <div class="stage-header">
+            <div>
+              <p class="eyebrow">REPRODUÇÃO WEBGL</p>
+              <h1>Asuna em movimento</h1>
+            </div>
+            <span class="format-chip">.POSE · 30 FPS</span>
+          </div>
+
+          <div class="stage" id="unity-container">
+            <canvas id="unity-canvas" tabindex="-1" aria-label="Avatar Asuna 3D"></canvas>
+            <div class="loader" id="unity-loader" role="status">
+              <div class="loader-orbit"><span></span></div>
+              <strong id="loader-title">Preparando a Asuna</strong>
+              <p id="loader-message">Carregando o motor de animação…</p>
+              <div class="progress"><i id="unity-progress"></i></div>
+            </div>
+          </div>
+
+          <div class="transport" aria-label="Controles de reprodução">
+            <button class="control primary" id="restart-button" type="button">
+              <span aria-hidden="true">↺</span> Reiniciar
+            </button>
+            <button class="control" id="play-button" type="button">
+              <span aria-hidden="true">▶</span> Reproduzir
+            </button>
+            <button class="control" id="pause-button" type="button">
+              <span aria-hidden="true">Ⅱ</span> Pausar
+            </button>
+            <label class="loop-control">
+              <input id="loop-toggle" type="checkbox" />
+              <span></span>
+              Repetir
+            </label>
+          </div>
+        </div>
+
+        <aside class="side-panel">
+          <section class="upload-card">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">NOVA ANIMAÇÃO</p>
+                <h2>Enviar pose</h2>
+              </div>
+              <span class="step">01</span>
+            </div>
+
+            <form id="upload-form">
+              <label class="dropzone" id="dropzone" for="pose-file">
+                <input id="pose-file" name="file" type="file" accept=".pose,text/plain" required />
+                <span class="upload-icon" aria-hidden="true">＋</span>
+                <strong id="file-label">Solte um arquivo .pose</strong>
+                <small>2D ou 3D · até 20 MB</small>
+              </label>
+
+              <div class="form-row">
+                <label>
+                  FPS
+                  <input id="fps" name="fps" type="number" min="1" max="120" value="30" />
+                </label>
+                <label>
+                  Chave da API <em>opcional</em>
+                  <input id="api-key" type="password" autocomplete="off" placeholder="X-API-Key" />
+                </label>
+              </div>
+
+              <button class="submit" type="submit" id="upload-button">
+                Normalizar e reproduzir
+                <span aria-hidden="true">→</span>
+              </button>
+            </form>
+          </section>
+
+          <section class="library-card">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">BIBLIOTECA</p>
+                <h2>Poses recentes</h2>
+              </div>
+              <button class="icon-button" id="refresh-button" type="button" aria-label="Atualizar poses">↻</button>
+            </div>
+            <div class="pose-list" id="pose-list">
+              <p class="empty">Nenhuma pose enviada ainda.</p>
+            </div>
+          </section>
+        </aside>
+      </section>
+
+      <footer>
+        <span>API <a href="/docs">OpenAPI</a></span>
+        <span id="active-pose">Aguardando pose</span>
+      </footer>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>
