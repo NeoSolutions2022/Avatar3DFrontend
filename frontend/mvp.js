@@ -291,7 +291,7 @@ async function submitPhrase(phrase) {
 function refreshComposer() {
   const hasText = elements.input.value.trim().length > 0;
   elements.sendButton.disabled = processing || !hasText;
-  elements.input.disabled = processing;
+  elements.input.setAttribute("aria-busy", String(processing));
   elements.micButton.disabled = processing;
 }
 
