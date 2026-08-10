@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="NeoTalk Chat com tradução de frases para LIBRAS no avatar 3D Asuna."
+    />
+    <title>NeoTalk Chat</title>
+    <link rel="stylesheet" href="/static/mvp.css" />
+  </head>
+  <body>
+    <div class="mvp-app">
+      <header class="mvp-header">
+        <a href="/mvp" class="mvp-brand" aria-label="NeoTalk Chat, inicio">
+          NeoTalk Chat
+        </a>
+        <span class="header-status" id="header-status">
+          <i aria-hidden="true"></i>
+          Conectando ao avatar
+        </span>
+      </header>
+
+      <main class="mvp-layout">
+        <section class="chat-panel" aria-label="Conversa">
+          <div class="chat-scroll" id="chat-scroll">
+            <div class="welcome" id="welcome">
+              <span class="welcome-mark" aria-hidden="true">N</span>
+              <h1>Bem-vindo ao NeoTalk Chat!</h1>
+              <p>Digite uma mensagem para conversar com seu avatar 3D.</p>
+            </div>
+            <div class="messages" id="messages" aria-live="polite"></div>
+          </div>
+
+          <form class="composer" id="composer">
+            <button
+              class="mic-button"
+              id="mic-button"
+              type="button"
+              aria-label="Falar mensagem"
+              title="Falar mensagem"
+            >
+              <span class="mic-icon" aria-hidden="true"></span>
+            </button>
+            <label class="sr-only" for="message-input">Mensagem</label>
+            <input
+              id="message-input"
+              name="message"
+              type="text"
+              maxlength="500"
+              autocomplete="off"
+              placeholder="Digite sua mensagem..."
+            />
+            <button class="send-button" id="send-button" type="submit" disabled>
+              Enviar
+            </button>
+          </form>
+        </section>
+
+        <aside class="avatar-panel" aria-label="Avatar 3D">
+          <div class="avatar-heading">
+            <div>
+              <span>TRADUÇÃO EM LIBRAS</span>
+              <h2>Avatar 3D</h2>
+            </div>
+            <span class="avatar-live" id="avatar-live">Carregando</span>
+          </div>
+
+          <div class="avatar-stage" id="unity-container">
+            <canvas id="unity-canvas" tabindex="-1" aria-label="Avatar Asuna 3D"></canvas>
+            <div class="avatar-loader" id="unity-loader" role="status">
+              <div class="loader-pulse" aria-hidden="true"></div>
+              <strong id="loader-title">Preparando a Asuna</strong>
+              <p id="loader-message">Carregando o avatar 3D...</p>
+              <div class="loader-track"><i id="unity-progress"></i></div>
+            </div>
+          </div>
+
+          <div class="avatar-footer">
+            <div>
+              <strong id="avatar-caption">Pronta para traduzir</strong>
+              <span id="avatar-words">Envie uma frase para começar.</span>
+            </div>
+            <button id="replay-button" type="button" disabled>
+              <span aria-hidden="true">&#9654;</span>
+              Repetir
+            </button>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/static/mvp.js"></script>
+  </body>
+</html>

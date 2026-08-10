@@ -12,6 +12,7 @@ docker compose up --build -d
 Abra:
 
 - Player: `http://localhost:8080`
+- MVP do chat: `http://localhost:8080/mvp`
 - OpenAPI: `http://localhost:8080/docs`
 - Healthcheck: `http://localhost:8080/api/v1/health`
 
@@ -38,6 +39,21 @@ avatarIframe.src = pose.player_url;
 ```
 
 A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O movimento e validado, normalizado e persistido antes de ser entregue ao player.
+
+## Chat MVP
+
+A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado na Asuna. A chave da integracao nunca e enviada ao navegador.
+
+Configure no `.env` ou no painel do container:
+
+```env
+NEOTALK_API_BASE_URL=https://infra-neotalk-api.k3p3ex.easypanel.host
+NEOTALK_API_KEY=sua-chave
+NEOTALK_API_TIMEOUT_SECONDS=30
+NEOTALK_MVP_POSE_FPS=30
+```
+
+O botao de microfone usa o reconhecimento de voz disponibilizado pelo navegador e preenche o mesmo campo de mensagem do chat.
 
 ## Estrutura
 

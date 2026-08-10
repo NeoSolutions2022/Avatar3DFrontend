@@ -143,6 +143,14 @@ class PoseStorage:
             ).fetchone()
         return self._from_row(row) if row is not None else None
 
+    def get_by_name(self, name: str) -> PoseRecord | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM poses WHERE name = ? ORDER BY created_at DESC LIMIT 1",
+                (name,),
+            ).fetchone()
+        return self._from_row(row) if row is not None else None
+
     def delete(self, pose_id: str) -> bool:
         with self._connect() as connection:
             result = connection.execute("DELETE FROM poses WHERE id = ?", (pose_id,))

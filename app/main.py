@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import settings
+from .neotalk import NeoTalkApiError, NeoTalkClient
 from .pose_format import PoseValidationError, normalize_pose
 from .storage import PoseRecord, PoseStorage
 
@@ -31,12 +32,17 @@ app.add_middleware(
 )
 
 storage = PoseStorage(settings)
+neotalk_client = NeoTalkClient(settings)
 
 
 class PoseTextRequest(BaseModel):
     name: str = Field(default="runtime.pose", min_length=1, max_length=180)
     content: str = Field(min_length=1)
     fps: float = Field(default=30.0, ge=1.0, le=120.0)
+
+
+class MvpSignRequest(BaseModel):
+    phrase: str = Field(min_length=1, max_length=500)
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
@@ -86,13 +92,93 @@ def persist_pose(*, name: str, fps: float, raw: bytes) -> PoseRecord:
     )
 
 
+def mvp_error(exception: NeoTalkApiError) -> HTTPException:
+    return HTTPException(status_code=exception.status_code, detail=exception.detail)
+
+
 @app.get("/api/v1/health", name="health")
 def health() -> dict:
     manifest = settings.webgl_dir / "manifest.json"
+    data_files = list((settings.webgl_dir / "Build").glob("*.data"))
+    wasm_files = list((settings.webgl_dir / "Build").glob("*.wasm"))
+    webgl_ready = (
+        manifest.is_file()
+        and any(path.stat().st_size > 1_000_000 for path in data_files)
+        and any(path.stat().st_size > 1_000_000 for path in wasm_files)
+    )
     return {
         "status": "ok",
         "api_version": "1.0.0",
-        "webgl_ready": manifest.is_file(),
+        "webgl_ready": webgl_ready,
+        "mvp_ready": neotalk_client.configured,
+    }
+
+
+@app.post("/api/v1/mvp/sign", status_code=202)
+def mvp_sign(payload: MvpSignRequest) -> JSONResponse:
+    phrase = " ".join(payload.phrase.split())
+    if not phrase:
+        raise HTTPException(status_code=422, detail="phrase is empty")
+    try:
+        upstream = neotalk_client.submit_phrase(phrase)
+    except NeoTalkApiError as exception:
+        raise mvp_error(exception) from exception
+
+    task_id = upstream.payload.get("task_id")
+    if not isinstance(task_id, str) or not task_id:
+        raise HTTPException(status_code=502, detail="pose API did not return a task id")
+    return JSONResponse(
+        status_code=202,
+        content={"status": "queued", "task_id": task_id, "phrase": phrase},
+    )
+
+
+@app.get("/api/v1/mvp/tasks/{task_id}", response_model=None)
+def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
+    try:
+        upstream = neotalk_client.task_status(task_id)
+    except NeoTalkApiError as exception:
+        raise mvp_error(exception) from exception
+
+    if upstream.status_code == 202:
+        return JSONResponse(
+            status_code=202,
+            content={"status": "processing", "task_id": task_id},
+        )
+
+    words = upstream.payload.get("palavras_encontradas", [])
+    if not isinstance(words, list):
+        words = []
+    words = [str(word) for word in words]
+
+    pose_name = f"mvp-{task_id}.pose"
+    record = storage.get_by_name(pose_name)
+    if record is None:
+        file_url = upstream.payload.get("file_url")
+        if not isinstance(file_url, str) or not file_url:
+            raise HTTPException(
+                status_code=502, detail="pose API did not return a pose file"
+            )
+        try:
+            raw = neotalk_client.download_pose(file_url)
+            record = persist_pose(
+                name=pose_name,
+                fps=settings.mvp_pose_fps,
+                raw=raw,
+            )
+        except NeoTalkApiError as exception:
+            raise mvp_error(exception) from exception
+        except HTTPException as exception:
+            raise HTTPException(
+                status_code=502,
+                detail=f"generated pose is invalid: {exception.detail}",
+            ) from exception
+
+    return {
+        "status": "ready",
+        "task_id": task_id,
+        "palavras_encontradas": words,
+        "pose": record_response(record, request),
     }
 
 
@@ -189,5 +275,21 @@ def index() -> FileResponse | JSONResponse:
         return JSONResponse(
             status_code=503,
             content={"detail": "frontend assets are not installed"},
+        )
+    return FileResponse(path)
+
+
+@app.get(
+    "/mvp",
+    response_class=HTMLResponse,
+    response_model=None,
+    include_in_schema=False,
+)
+def mvp_index() -> FileResponse | JSONResponse:
+    path = settings.frontend_dir / "mvp.html"
+    if not path.is_file():
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "MVP frontend assets are not installed"},
         )
     return FileResponse(path)

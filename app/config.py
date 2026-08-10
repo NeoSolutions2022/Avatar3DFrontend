@@ -38,6 +38,15 @@ class Settings:
         os.getenv("AVATAR3D_NORMALIZATION_MARGIN", "1.02")
     )
     log_level: str = os.getenv("AVATAR3D_LOG_LEVEL", "info")
+    neotalk_api_base_url: str = os.getenv(
+        "NEOTALK_API_BASE_URL",
+        "https://infra-neotalk-api.k3p3ex.easypanel.host",
+    )
+    neotalk_api_key: str = os.getenv("NEOTALK_API_KEY", "")
+    neotalk_api_timeout_seconds: float = float(
+        os.getenv("NEOTALK_API_TIMEOUT_SECONDS", "30")
+    )
+    mvp_pose_fps: float = float(os.getenv("NEOTALK_MVP_POSE_FPS", "30"))
 
 
 settings = Settings()
