@@ -8,6 +8,11 @@ let activePose = null;
 let activePhrase = "";
 let processing = false;
 let toastTimer = null;
+let zoomLevel = 1;
+
+const minZoom = 0.76;
+const maxZoom = 1.48;
+const zoomStep = 0.12;
 
 const elements = {
   avatarCaption: document.querySelector("#avatar-caption"),
@@ -28,6 +33,9 @@ const elements = {
   sendButton: document.querySelector("#send-button"),
   toast: document.querySelector("#toast"),
   welcome: document.querySelector("#welcome"),
+  zoomInButton: document.querySelector("#zoom-in-button"),
+  zoomOutButton: document.querySelector("#zoom-out-button"),
+  zoomResetButton: document.querySelector("#zoom-reset-button"),
 };
 
 // Unity WebGL installs global keyboard listeners. Even with global capture
@@ -104,12 +112,16 @@ async function initializeAvatar() {
     );
 
     sendUnity("SetBackgroundColor", "#ffffff");
+    sendUnity("SetCameraZoom", zoomLevel.toFixed(2));
     sendUnity("PausePlayback");
     elements.loader.classList.add("hidden");
     elements.avatarLive.textContent = "Online";
     elements.avatarLive.classList.add("ready");
     elements.headerStatus.className = "header-status ready";
     elements.headerStatus.innerHTML = "<i aria-hidden=\"true\"></i>Avatar conectado";
+    elements.zoomInButton.disabled = false;
+    elements.zoomOutButton.disabled = false;
+    elements.zoomResetButton.disabled = false;
 
     if (pendingPose) {
       playPose(pendingPose.pose, pendingPose.words, pendingPose.phrase);
@@ -312,6 +324,18 @@ elements.replayButton.addEventListener("click", () => {
     elements.avatarCaption.textContent = activePhrase;
   }
 });
+
+function setZoom(nextZoom) {
+  zoomLevel = Math.min(maxZoom, Math.max(minZoom, nextZoom));
+  sendUnity("SetCameraZoom", zoomLevel.toFixed(2));
+  elements.zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
+  elements.zoomOutButton.disabled = !unityInstance || zoomLevel <= minZoom;
+  elements.zoomInButton.disabled = !unityInstance || zoomLevel >= maxZoom;
+}
+
+elements.zoomOutButton.addEventListener("click", () => setZoom(zoomLevel - zoomStep));
+elements.zoomInButton.addEventListener("click", () => setZoom(zoomLevel + zoomStep));
+elements.zoomResetButton.addEventListener("click", () => setZoom(1));
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {

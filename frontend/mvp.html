@@ -14,7 +14,8 @@
     <div class="mvp-app">
       <header class="mvp-header">
         <a href="/mvp" class="mvp-brand" aria-label="NeoTalk Chat, inicio">
-          NeoTalk Chat
+          <img src="/static/assets/neotalk-logo.png" alt="NeoTalk" />
+          <span>Avatar 3D</span>
         </a>
         <span class="header-status" id="header-status">
           <i aria-hidden="true"></i>
@@ -27,8 +28,9 @@
           <div class="chat-scroll" id="chat-scroll">
             <div class="welcome" id="welcome">
               <span class="welcome-mark" aria-hidden="true">N</span>
+              <span class="welcome-eyebrow">TRADUCAO EM LIBRAS</span>
               <h1>Bem-vindo ao NeoTalk Chat!</h1>
-              <p>Digite uma mensagem para conversar com seu avatar 3D.</p>
+              <p>Transforme texto ou voz em movimentos naturais com a Asuna.</p>
             </div>
             <div class="messages" id="messages" aria-live="polite"></div>
           </div>
@@ -68,6 +70,11 @@
           </div>
 
           <div class="avatar-stage" id="unity-container">
+            <div class="avatar-tools" role="group" aria-label="Zoom do avatar">
+              <button id="zoom-out-button" type="button" aria-label="Diminuir zoom" title="Diminuir zoom" disabled>&minus;</button>
+              <button id="zoom-reset-button" class="zoom-value" type="button" aria-label="Restaurar zoom" title="Restaurar zoom" disabled>100%</button>
+              <button id="zoom-in-button" type="button" aria-label="Aumentar zoom" title="Aumentar zoom" disabled>&plus;</button>
+            </div>
             <canvas id="unity-canvas" tabindex="-1" aria-label="Avatar Asuna 3D"></canvas>
             <div class="avatar-loader" id="unity-loader" role="status">
               <div class="loader-pulse" aria-hidden="true"></div>
