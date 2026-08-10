@@ -30,6 +30,19 @@ const elements = {
   welcome: document.querySelector("#welcome"),
 };
 
+// Unity WebGL installs global keyboard listeners. Even with global capture
+// disabled in the player, this barrier keeps keyboard and IME events inside
+// the HTML input while it has focus.
+for (const eventName of ["keydown", "keypress", "keyup"]) {
+  elements.input.addEventListener(eventName, (event) => {
+    event.stopPropagation();
+  });
+}
+
+elements.input.addEventListener("pointerdown", () => {
+  elements.canvas.blur();
+});
+
 function errorMessage(error, fallback = "Não foi possível concluir a solicitação.") {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;
@@ -278,7 +291,7 @@ async function submitPhrase(phrase) {
 function refreshComposer() {
   const hasText = elements.input.value.trim().length > 0;
   elements.sendButton.disabled = processing || !hasText;
-  elements.input.disabled = processing;
+  elements.input.setAttribute("aria-busy", String(processing));
   elements.micButton.disabled = processing;
 }
 
