@@ -4,7 +4,14 @@ import math
 import unittest
 from pathlib import Path
 
-from app.pose_format import BODY_TREE, PoseValidationError, normalize_pose, parse_pose
+from app.pose_format import (
+    BODY_TREE,
+    REFERENCE_TARGET_LENGTHS,
+    PoseValidationError,
+    apply_reference_arm_proportions,
+    normalize_pose,
+    parse_pose,
+)
 
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +79,41 @@ class PoseFormatTests(unittest.TestCase):
         self.assertEqual(normalized.source_dimensions, 2)
         self.assertEqual(dimensions, 3)
         self.assertTrue(any(abs(joint.z) > 1e-5 for joint in body.values()))
+
+    def test_uses_reference_arm_proportions_for_short_clips(self) -> None:
+        target_lengths = {
+            "torso": REFERENCE_TARGET_LENGTHS["torso"],
+            "half_shoulder_width": REFERENCE_TARGET_LENGTHS["half_shoulder_width"],
+            "half_hip_width": REFERENCE_TARGET_LENGTHS["half_hip_width"],
+            "neck_head": REFERENCE_TARGET_LENGTHS["neck_head"],
+            "upper_arm": 320.0,
+            "forearm": 190.0,
+        }
+
+        scale = apply_reference_arm_proportions(target_lengths)
+
+        self.assertAlmostEqual(scale, 1.0)
+        self.assertAlmostEqual(
+            target_lengths["upper_arm"], REFERENCE_TARGET_LENGTHS["upper_arm"]
+        )
+        self.assertAlmostEqual(
+            target_lengths["forearm"], REFERENCE_TARGET_LENGTHS["forearm"]
+        )
+
+    def test_never_shortens_a_larger_observed_arm(self) -> None:
+        target_lengths = {
+            "torso": REFERENCE_TARGET_LENGTHS["torso"],
+            "half_shoulder_width": REFERENCE_TARGET_LENGTHS["half_shoulder_width"],
+            "half_hip_width": REFERENCE_TARGET_LENGTHS["half_hip_width"],
+            "neck_head": REFERENCE_TARGET_LENGTHS["neck_head"],
+            "upper_arm": 420.0,
+            "forearm": 380.0,
+        }
+
+        apply_reference_arm_proportions(target_lengths)
+
+        self.assertEqual(target_lengths["upper_arm"], 420.0)
+        self.assertEqual(target_lengths["forearm"], 380.0)
 
     def test_rejects_pose_without_body(self) -> None:
         invalid = "# Frame: 000001.jpg - Face Keypoints\nNose: 1 2 0.9\n"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import statistics
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 
@@ -65,6 +66,27 @@ CANONICAL_DIRECTIONS = {
     ("RBigToe", "RSmallToe"): 1.0,
 }
 
+# Comprimentos extraidos da frase de referencia validada visualmente na Asuna:
+# "HOJE EU APRENDER LIBRAS ENTAO COMUNICACAO MELHORAR". Os arquivos recebidos
+# podem conter poucos frames e, nesse caso, o maior comprimento 2D observado
+# subestima principalmente o antebraco. Reconstruir Z com esse comprimento curto
+# deixa o componente vertical grande demais e faz os bracos parecerem elevados.
+REFERENCE_TARGET_LENGTHS = {
+    "torso": 585.366,
+    "half_shoulder_width": 208.402,
+    "half_hip_width": 149.286,
+    "neck_head": 239.120,
+    "upper_arm": 388.204,
+    "forearm": 345.984,
+}
+REFERENCE_SCALE_GROUPS = (
+    "torso",
+    "half_shoulder_width",
+    "half_hip_width",
+    "neck_head",
+)
+REFERENCE_ARM_GROUPS = ("upper_arm", "forearm")
+
 
 class PoseValidationError(ValueError):
     pass
@@ -105,6 +127,7 @@ def normalize_pose(
 
     frames, source_dimensions = parse_pose(text, filename, max_frames)
     target_lengths = estimate_lengths(frames, margin)
+    apply_reference_arm_proportions(target_lengths)
     directions = estimate_directions(frames, source_dimensions)
     reconstruct_depth(frames, target_lengths, directions, source_dimensions)
     content = serialize_pose(frames, filename, source_dimensions, target_lengths)
@@ -221,6 +244,27 @@ def estimate_lengths(frames: list[Frame], margin: float) -> dict[str, float]:
                 math.hypot(body[child].x - body[parent].x, body[child].y - body[parent].y)
             )
     return {group: max(values) * margin for group, values in projected.items()}
+
+
+def apply_reference_arm_proportions(target_lengths: dict[str, float]) -> float:
+    """Use a escala corporal do clipe e imponha o minimo validado dos bracos.
+
+    O maximo projetado continua sendo respeitado, portanto um gesto realmente
+    estendido nunca e encurtado. A mediana de quatro medidas centrais torna a
+    escala resistente a inclinacao, oclusao ou um ombro detectado com ruido.
+    """
+    scale_samples = [
+        target_lengths[group] / REFERENCE_TARGET_LENGTHS[group]
+        for group in REFERENCE_SCALE_GROUPS
+        if target_lengths.get(group, 0.0) > 0.0
+    ]
+    reference_scale = statistics.median(scale_samples) if scale_samples else 1.0
+
+    for group in REFERENCE_ARM_GROUPS:
+        reference_length = REFERENCE_TARGET_LENGTHS[group] * reference_scale
+        target_lengths[group] = max(target_lengths[group], reference_length)
+
+    return reference_scale
 
 
 def estimate_directions(
