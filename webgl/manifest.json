@@ -3,7 +3,7 @@
     "dataUrl": "Build/webgl.data",
     "frameworkUrl": "Build/webgl.framework.js",
     "codeUrl": "Build/webgl.wasm",
-    "buildBytes": "162060174",
+    "buildBytes": "162131507",
     "unityVersion": "6000.2.2f1",
-    "builtAtUtc": "2026-08-10T17:59:48.0451538Z"
+    "builtAtUtc": "2026-08-10T19:51:01.4974712Z"
 }
