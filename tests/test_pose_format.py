@@ -15,7 +15,13 @@ from app.pose_format import (
 
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[1]
-CHAIR_POSE = PLATFORM_ROOT / "webgl" / "StreamingAssets" / "cadeira_legacy_z.pose"
+CHAIR_POSE = (
+    PLATFORM_ROOT
+    / "webgl"
+    / "asuna"
+    / "StreamingAssets"
+    / "cadeira_legacy_z.pose"
+)
 
 
 def first_frames(text: str, count: int = 2) -> str:

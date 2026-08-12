@@ -1,6 +1,14 @@
-const runtimeObject = "Pose skeleton Preview";
+let runtimeObject = "Pose skeleton Preview";
 const pollIntervalMs = 2200;
 const maxPollAttempts = 140;
+
+const fallbackCatalog = {
+  defaultAvatar: "asuna",
+  avatars: [
+    { id: "asuna", name: "Asuna", manifestUrl: "asuna/manifest.json" },
+    { id: "lia", name: "LIA", manifestUrl: "lia/manifest.json" },
+  ],
+};
 
 let unityInstance = null;
 let pendingPose = null;
@@ -11,6 +19,14 @@ let toastTimer = null;
 let zoomLevel = 1;
 let poseLoadContext = null;
 let poseLoadTimer = null;
+let avatarCatalog = null;
+let selectedAvatar = ["asuna", "lia"].includes(localStorage.getItem("neotalk-avatar"))
+  ? localStorage.getItem("neotalk-avatar")
+  : "asuna";
+let selectedAvatarName = selectedAvatar === "lia" ? "LIA" : "Asuna";
+let avatarLoadSequence = 0;
+let unityLoaderScript = null;
+let activeWords = [];
 
 const minZoom = 0.76;
 const maxZoom = 1.48;
@@ -18,6 +34,7 @@ const zoomStep = 0.12;
 
 const elements = {
   avatarCaption: document.querySelector("#avatar-caption"),
+  avatarOptions: [...document.querySelectorAll("[data-avatar]")],
   avatarLive: document.querySelector("#avatar-live"),
   avatarWords: document.querySelector("#avatar-words"),
   canvas: document.querySelector("#unity-canvas"),
@@ -40,13 +57,12 @@ const elements = {
   zoomResetButton: document.querySelector("#zoom-reset-button"),
 };
 
-// Unity WebGL installs global keyboard listeners. Even with global capture
-// disabled in the player, this barrier keeps keyboard and IME events inside
-// the HTML input while it has focus.
+// This capture-phase barrier is installed before the Unity loader. Unity 6
+// otherwise receives keyboard events at window level before the HTML input.
 for (const eventName of ["keydown", "keypress", "keyup"]) {
-  elements.input.addEventListener(eventName, (event) => {
-    event.stopPropagation();
-  });
+  window.addEventListener(eventName, (event) => {
+    if (event.target === elements.input) event.stopImmediatePropagation();
+  }, true);
 }
 
 elements.input.addEventListener("pointerdown", () => {
@@ -85,34 +101,111 @@ function sendUnity(method, value) {
   return true;
 }
 
-async function initializeAvatar() {
+function setAvatarOptionState(isLoading = false) {
+  for (const option of elements.avatarOptions) {
+    const isActive = option.dataset.avatar === selectedAvatar;
+    option.classList.toggle("active", isActive);
+    option.setAttribute("aria-pressed", String(isActive));
+    option.disabled = isLoading;
+  }
+}
+
+async function getAvatarCatalog() {
+  if (avatarCatalog) return avatarCatalog;
   try {
-    const manifestResponse = await fetch("/webgl/manifest.json", { cache: "no-store" });
+    const response = await fetch("/webgl/catalog.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("Catálogo indisponível");
+    avatarCatalog = await response.json();
+  } catch (_) {
+    avatarCatalog = fallbackCatalog;
+  }
+  return avatarCatalog;
+}
+
+async function unloadAvatar() {
+  const instance = unityInstance;
+  unityInstance = null;
+  if (instance?.Quit) {
+    try { await instance.Quit(); } catch (_) { /* runtime already stopped */ }
+  }
+  if (unityLoaderScript) {
+    unityLoaderScript.remove();
+    unityLoaderScript = null;
+  }
+}
+
+async function initializeAvatar(avatarId = selectedAvatar) {
+  const loadSequence = ++avatarLoadSequence;
+  const resumePose = poseLoadContext
+    ? { ...poseLoadContext }
+    : activePose
+      ? { pose: activePose, words: activeWords, phrase: activePhrase, statusMessage: null }
+      : pendingPose;
+
+  clearTimeout(poseLoadTimer);
+  poseLoadContext = null;
+  pendingPose = null;
+  selectedAvatar = avatarId;
+  selectedAvatarName = avatarId === "lia" ? "LIA" : "Asuna";
+  localStorage.setItem("neotalk-avatar", avatarId);
+  setAvatarOptionState(true);
+  elements.loader.classList.remove("hidden");
+  elements.loaderTitle.textContent = `Preparando ${selectedAvatarName}`;
+  elements.loaderMessage.textContent = "Carregando o avatar 3D...";
+  elements.progress.style.width = "0%";
+  elements.avatarLive.textContent = "Carregando";
+  elements.avatarLive.classList.remove("ready");
+  elements.headerStatus.className = "header-status";
+  elements.headerStatus.innerHTML = "<i aria-hidden=\"true\"></i>Conectando ao avatar";
+  elements.canvas.setAttribute("aria-label", `Avatar ${selectedAvatarName} 3D`);
+  elements.zoomInButton.disabled = true;
+  elements.zoomOutButton.disabled = true;
+  elements.zoomResetButton.disabled = true;
+
+  try {
+    await unloadAvatar();
+    if (loadSequence !== avatarLoadSequence) return;
+
+    const catalog = await getAvatarCatalog();
+    const avatar = catalog.avatars.find((item) => item.id === avatarId)
+      || catalog.avatars.find((item) => item.id === catalog.defaultAvatar)
+      || fallbackCatalog.avatars[0];
+    selectedAvatarName = avatar.name;
+    const manifestUrl = new URL(avatar.manifestUrl, `${window.location.origin}/webgl/`);
+    const manifestResponse = await fetch(manifestUrl, { cache: "no-store" });
     if (!manifestResponse.ok) throw new Error("Build WebGL não encontrado.");
     const manifest = await manifestResponse.json();
+    runtimeObject = manifest.runtimeObject || runtimeObject;
+    const runtimeBase = new URL("./", manifestUrl);
     const script = document.createElement("script");
-    script.src = `/webgl/${manifest.loaderUrl}`;
+    script.src = new URL(manifest.loaderUrl, runtimeBase).href;
     script.async = true;
+    unityLoaderScript = script;
     document.body.appendChild(script);
     await new Promise((resolve, reject) => {
       script.onload = resolve;
       script.onerror = () => reject(new Error("Falha ao carregar o motor 3D."));
     });
 
-    unityInstance = await createUnityInstance(
+    const nextInstance = await createUnityInstance(
       elements.canvas,
       {
-        dataUrl: `/webgl/${manifest.dataUrl}`,
-        frameworkUrl: `/webgl/${manifest.frameworkUrl}`,
-        codeUrl: `/webgl/${manifest.codeUrl}`,
-        streamingAssetsUrl: "/webgl/StreamingAssets",
+        dataUrl: new URL(manifest.dataUrl, runtimeBase).href,
+        frameworkUrl: new URL(manifest.frameworkUrl, runtimeBase).href,
+        codeUrl: new URL(manifest.codeUrl, runtimeBase).href,
+        streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
         companyName: "NeoTalk",
-        productName: "Avatar3D",
-        productVersion: "1.1.0",
+        productName: `NeoTalk ${selectedAvatarName}`,
+        productVersion: "2.0.0",
       },
       (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },
     );
 
+    if (loadSequence !== avatarLoadSequence) {
+      if (nextInstance?.Quit) await nextInstance.Quit();
+      return;
+    }
+    unityInstance = nextInstance;
     sendUnity("SetBackgroundColor", "#ffffff");
     sendUnity("SetCameraZoom", zoomLevel.toFixed(2));
     sendUnity("PausePlayback");
@@ -124,23 +217,27 @@ async function initializeAvatar() {
     elements.zoomInButton.disabled = false;
     elements.zoomOutButton.disabled = false;
     elements.zoomResetButton.disabled = false;
+    setAvatarOptionState(false);
 
-    if (pendingPose) {
+    const poseToResume = pendingPose || resumePose;
+    pendingPose = null;
+    if (poseToResume) {
       playPose(
-        pendingPose.pose,
-        pendingPose.words,
-        pendingPose.phrase,
-        pendingPose.statusMessage,
+        poseToResume.pose,
+        poseToResume.words,
+        poseToResume.phrase,
+        poseToResume.statusMessage,
       );
-      pendingPose = null;
     }
   } catch (error) {
+    if (loadSequence !== avatarLoadSequence) return;
     const message = errorMessage(error, "Renderizador indisponível.");
     elements.loaderTitle.textContent = "Renderizador indisponível";
     elements.loaderMessage.textContent = message;
     elements.headerStatus.className = "header-status error";
     elements.headerStatus.innerHTML = "<i aria-hidden=\"true\"></i>Avatar indisponível";
     elements.avatarLive.textContent = "Offline";
+    setAvatarOptionState(false);
     showToast(message, true);
   }
 }
@@ -203,6 +300,7 @@ function addMessage({ role, text, title = "", processingMessage = false, replay 
 }
 
 function updateProcessingMessage(message, { title = "", text, isError = false }) {
+  if (!message) return;
   message.bubble.className = "message-bubble";
   message.bubble.replaceChildren();
   if (title) {
@@ -239,7 +337,7 @@ function finishPoseLoad(success, message = "") {
   poseLoadContext = null;
 
   if (!success) {
-    const detail = message || "A Asuna não conseguiu carregar os movimentos.";
+    const detail = message || `${selectedAvatarName} não conseguiu carregar os movimentos.`;
     updateProcessingMessage(statusMessage, {
       title: "Falha ao carregar a pose",
       text: detail,
@@ -254,6 +352,7 @@ function finishPoseLoad(success, message = "") {
 
   activePose = pose;
   activePhrase = phrase;
+  activeWords = Array.isArray(words) ? [...words] : [];
   const cleaned = cleanWords(words);
   const wordsLabel = cleaned.length ? cleaned.join(", ") : "nenhum sinal identificado";
   updateProcessingMessage(statusMessage, {
@@ -279,7 +378,7 @@ function playPose(pose, words, phrase, statusMessage) {
   elements.avatarWords.textContent = phrase;
   elements.replayButton.disabled = true;
   poseLoadTimer = setTimeout(() => {
-    finishPoseLoad(false, "A Asuna não confirmou o carregamento da pose.");
+    finishPoseLoad(false, `${selectedAvatarName} não confirmou o carregamento da pose.`);
   }, 20000);
 }
 
@@ -299,7 +398,7 @@ async function pollTask(taskId, phrase, statusMessage) {
       if (response.status === 202) continue;
       updateProcessingMessage(statusMessage, {
         title: "Pose recebida",
-        text: "Carregando os movimentos na Asuna...",
+        text: `Carregando os movimentos em ${selectedAvatarName}...`,
       });
 
       if (unityInstance) {
@@ -440,5 +539,14 @@ if (SpeechRecognition) {
   });
 }
 
+for (const option of elements.avatarOptions) {
+  option.addEventListener("click", () => {
+    const avatarId = option.dataset.avatar;
+    if (!avatarId || avatarId === selectedAvatar) return;
+    initializeAvatar(avatarId);
+  });
+}
+
+setAvatarOptionState(false);
 refreshComposer();
-initializeAvatar();
+initializeAvatar(selectedAvatar);

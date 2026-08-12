@@ -1,3 +1,4 @@
 webgl/Build/*.data filter=lfs diff=lfs merge=lfs -text
 webgl/Build/*.wasm filter=lfs diff=lfs merge=lfs -text
-
+webgl/*/Build/*.data filter=lfs diff=lfs merge=lfs -text
+webgl/*/Build/*.wasm filter=lfs diff=lfs merge=lfs -text
