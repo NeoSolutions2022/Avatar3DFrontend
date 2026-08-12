@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 from pathlib import Path
 
@@ -19,8 +20,8 @@ app = FastAPI(
     title="Avatar3D Pose API",
     version="1.0.0",
     description=(
-        "Receives 2D or 3D .pose data, normalizes it for the Asuna avatar, "
-        "and exposes it to the Unity WebGL player."
+        "Receives 2D or 3D .pose data, normalizes it for the NeoTalk avatars, "
+        "and exposes it to the Unity WebGL players."
     ),
 )
 app.add_middleware(
@@ -99,18 +100,35 @@ def mvp_error(exception: NeoTalkApiError) -> HTTPException:
 
 @app.get("/api/v1/health", name="health")
 def health() -> dict:
-    manifest = settings.webgl_dir / "manifest.json"
-    data_files = list((settings.webgl_dir / "Build").glob("*.data"))
-    wasm_files = list((settings.webgl_dir / "Build").glob("*.wasm"))
-    webgl_ready = (
-        manifest.is_file()
-        and any(path.stat().st_size > 1_000_000 for path in data_files)
-        and any(path.stat().st_size > 1_000_000 for path in wasm_files)
-    )
+    ready_avatars: list[str] = []
+    catalog_path = settings.webgl_dir / "catalog.json"
+    try:
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        for avatar in catalog.get("avatars", []):
+            avatar_id = str(avatar.get("id", "")).strip()
+            manifest_relative = str(avatar.get("manifestUrl", "")).strip()
+            manifest_path = settings.webgl_dir / manifest_relative
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            data_path = manifest_path.parent / manifest["dataUrl"]
+            wasm_path = manifest_path.parent / manifest["codeUrl"]
+            if (
+                avatar_id
+                and data_path.is_file()
+                and data_path.stat().st_size > 1_000_000
+                and wasm_path.is_file()
+                and wasm_path.stat().st_size > 1_000_000
+            ):
+                ready_avatars.append(avatar_id)
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        ready_avatars = []
+
+    expected_avatars = {"asuna", "lia"}
+    webgl_ready = expected_avatars.issubset(ready_avatars)
     return {
         "status": "ok",
         "api_version": "1.0.0",
         "webgl_ready": webgl_ready,
+        "avatars": ready_avatars,
         "mvp_ready": neotalk_client.configured,
     }
 

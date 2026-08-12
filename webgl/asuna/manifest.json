@@ -1,0 +1,12 @@
+{
+    "avatarName": "Asuna",
+    "runtimeObject": "Asuna Pose Skeleton Preview",
+    "scene": "Assets/Scenes/AsunaRuntime.unity",
+    "loaderUrl": "Build/asuna.loader.js",
+    "dataUrl": "Build/asuna.data",
+    "frameworkUrl": "Build/asuna.framework.js",
+    "codeUrl": "Build/asuna.wasm",
+    "buildBytes": "167387241",
+    "unityVersion": "6000.2.2f1",
+    "builtAtUtc": "2026-08-11T23:20:48.4792362Z"
+}

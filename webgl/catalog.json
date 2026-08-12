@@ -1,0 +1,15 @@
+{
+    "defaultAvatar": "asuna",
+    "avatars": [
+        {
+            "id": "asuna",
+            "name": "Asuna",
+            "manifestUrl": "asuna/manifest.json"
+        },
+        {
+            "id": "lia",
+            "name": "LIA",
+            "manifestUrl": "lia/manifest.json"
+        }
+    ]
+}

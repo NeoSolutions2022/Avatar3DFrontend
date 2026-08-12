@@ -38,7 +38,11 @@ class PoseApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         source = (
-            PLATFORM_ROOT / "webgl" / "StreamingAssets" / "cadeira_legacy_z.pose"
+            PLATFORM_ROOT
+            / "webgl"
+            / "asuna"
+            / "StreamingAssets"
+            / "cadeira_legacy_z.pose"
         ).read_text(encoding="utf-8-sig")
         cls.pose_text = first_frame(source)
         cls.client = TestClient(app)
@@ -52,6 +56,8 @@ class PoseApiTests(unittest.TestCase):
         health = self.client.get("/api/v1/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["status"], "ok")
+        self.assertTrue(health.json()["webgl_ready"])
+        self.assertEqual(set(health.json()["avatars"]), {"asuna", "lia"})
 
         created = self.client.post(
             "/api/v1/poses/text",

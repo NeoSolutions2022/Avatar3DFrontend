@@ -30,7 +30,7 @@
               <span class="welcome-mark" aria-hidden="true">N</span>
               <span class="welcome-eyebrow">TRADUCAO EM LIBRAS</span>
               <h1>Bem-vindo ao NeoTalk Chat!</h1>
-              <p>Transforme texto ou voz em movimentos naturais com a Asuna.</p>
+              <p>Transforme texto ou voz em movimentos naturais com seu avatar.</p>
             </div>
             <div class="messages" id="messages" aria-live="polite"></div>
           </div>
@@ -66,7 +66,13 @@
               <span>TRADUÇÃO EM LIBRAS</span>
               <h2>Avatar 3D</h2>
             </div>
-            <span class="avatar-live" id="avatar-live">Carregando</span>
+            <div class="avatar-heading-actions">
+              <div class="avatar-switcher" role="group" aria-label="Escolher avatar">
+                <button class="avatar-option active" type="button" data-avatar="asuna" aria-pressed="true">Asuna</button>
+                <button class="avatar-option" type="button" data-avatar="lia" aria-pressed="false">LIA</button>
+              </div>
+              <span class="avatar-live" id="avatar-live">Carregando</span>
+            </div>
           </div>
 
           <div class="avatar-stage" id="unity-container">

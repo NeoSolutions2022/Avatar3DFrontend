@@ -1,6 +1,6 @@
 # NeoTalk Avatar 3D
 
-Repositorio independente da plataforma web da Asuna. Ele contem o frontend, a API de poses, o container Docker e os binarios Unity WebGL necessarios para executar o avatar. O projeto-fonte do Unity nao faz parte deste repositorio.
+Repositorio independente da plataforma web dos avatares Asuna e LIA. Ele contem o frontend, a API de poses, o container Docker e os binarios Unity WebGL necessarios para executar os avatares. O projeto-fonte do Unity nao faz parte deste repositorio.
 
 ## Executar
 
@@ -42,7 +42,7 @@ A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O movimen
 
 ## Chat MVP
 
-A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado na Asuna. A chave da integracao nunca e enviada ao navegador.
+A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado no avatar selecionado. O usuario pode alternar entre Asuna e LIA; a escolha e preservada no navegador e o sinal ativo e recarregado durante a troca. A chave da integracao nunca e enviada ao navegador.
 
 Configure no `.env` ou no painel do container:
 
@@ -61,7 +61,7 @@ O botao de microfone usa o reconhecimento de voz disponibilizado pelo navegador 
 app/                 FastAPI, normalizacao e SQLite
 frontend/            interface web e integracao JavaScript
 tests/               testes de formato e API
-webgl/               build Unity WebGL da Asuna
+webgl/               catalogo e builds Unity WebGL de Asuna e LIA
 Dockerfile           imagem unica para API, frontend e WebGL
 compose.yaml         servico e volume persistente
 ```
@@ -88,8 +88,8 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Os arquivos `webgl/Build/*.data` e `*.wasm` usam Git LFS. Instale o Git LFS antes de clonar ou publicar este repositorio.
+Os arquivos `webgl/*/Build/*.data` e `*.wasm` usam Git LFS. Instale o Git LFS antes de clonar ou publicar este repositorio.
 
-Para atualizar a Asuna, gere um novo build no projeto Unity original e substitua o conteudo de `webgl/`. O arquivo `webgl/manifest.json` deve apontar para os quatro artefatos presentes em `webgl/Build/`.
+Para atualizar os avatares, execute `BuildAvatarWebGL.BuildAllFromCommandLine` no projeto Unity original e substitua o conteudo de `webgl/`. O arquivo `webgl/catalog.json` lista os avatares e cada subpasta (`webgl/asuna` e `webgl/lia`) possui seu proprio `manifest.json` e runtime.
 
 Antes de publicar o repositorio, confirme que a licenca do modelo Asuna permite redistribuir os binarios WebGL gerados.
