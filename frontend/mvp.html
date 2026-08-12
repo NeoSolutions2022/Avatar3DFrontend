@@ -8,7 +8,7 @@
       content="NeoTalk Chat com tradução de frases para LIBRAS no avatar 3D Asuna."
     />
     <title>NeoTalk Chat</title>
-    <link rel="stylesheet" href="/static/mvp.css" />
+    <link rel="stylesheet" href="/static/mvp.css?v=20260812-lia" />
   </head>
   <body>
     <div class="mvp-app">
@@ -67,6 +67,13 @@
               <h2>Avatar 3D</h2>
             </div>
             <div class="avatar-heading-actions">
+              <button
+                class="avatar-float-toggle"
+                id="avatar-float-toggle"
+                type="button"
+                aria-pressed="false"
+                title="Usar avatar flutuante"
+              >Flutuar</button>
               <div class="avatar-switcher" role="group" aria-label="Escolher avatar">
                 <button class="avatar-option active" type="button" data-avatar="asuna" aria-pressed="true">Asuna</button>
                 <button class="avatar-option" type="button" data-avatar="lia" aria-pressed="false">LIA</button>
@@ -75,7 +82,7 @@
             </div>
           </div>
 
-          <div class="avatar-stage" id="unity-container">
+          <div class="avatar-stage" id="unity-container" aria-label="Área de exibição do avatar">
             <div class="avatar-tools" role="group" aria-label="Zoom do avatar">
               <button id="zoom-out-button" type="button" aria-label="Diminuir zoom" title="Diminuir zoom" disabled>&minus;</button>
               <button id="zoom-reset-button" class="zoom-value" type="button" aria-label="Restaurar zoom" title="Restaurar zoom" disabled>100%</button>
@@ -105,6 +112,6 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/static/mvp.js"></script>
+    <script type="module" src="/static/mvp.js?v=20260812-lia"></script>
   </body>
 </html>
