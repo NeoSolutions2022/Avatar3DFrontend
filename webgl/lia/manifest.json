@@ -1,12 +1,12 @@
 {
     "avatarName": "LIA",
-    "runtimeObject": "Asuna Pose Skeleton Preview",
+    "runtimeObject": "LIA Pose Skeleton Preview",
     "scene": "Assets/Scenes/LIARuntime.unity",
     "loaderUrl": "Build/lia.loader.js",
     "dataUrl": "Build/lia.data",
     "frameworkUrl": "Build/lia.framework.js",
     "codeUrl": "Build/lia.wasm",
-    "buildBytes": "99446069",
+    "buildBytes": "99446926",
     "unityVersion": "6000.2.2f1",
-    "builtAtUtc": "2026-08-11T23:21:19.2566773Z"
+    "builtAtUtc": "2026-08-12T02:48:57.8220455Z"
 }

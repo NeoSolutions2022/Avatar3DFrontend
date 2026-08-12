@@ -9,7 +9,7 @@ const fallbackCatalog = {
     { id: "lia", name: "LIA", manifestUrl: "lia/manifest.json" },
   ],
 };
-const avatarZoomLevels = { asuna: 1, lia: 1.24 };
+const avatarZoomLevels = { asuna: 1, lia: 1.28 };
 
 let unityInstance = null;
 let pendingPose = null;
@@ -207,7 +207,13 @@ async function initializeAvatar(avatarId = selectedAvatar) {
         productName: `NeoTalk ${selectedAvatarName}`,
         productVersion: "2.0.0",
         matchWebGLToCanvasSize: true,
-        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        // LIA has finer facial and hand geometry. A slightly higher cap keeps
+        // fingers and blend-shape contours crisp on high-density mobile screens
+        // without paying the cost of an unrestricted 3x/4x WebGL framebuffer.
+        devicePixelRatio: Math.min(
+          window.devicePixelRatio || 1,
+          selectedAvatar === "lia" ? 2.25 : 2,
+        ),
       },
       (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },
     );
