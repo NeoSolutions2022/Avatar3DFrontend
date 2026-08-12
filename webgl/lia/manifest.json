@@ -1,6 +1,6 @@
 {
     "avatarName": "LIA",
-    "runtimeObject": "LIA Pose Skeleton Preview",
+    "runtimeObject": "Asuna Pose Skeleton Preview",
     "scene": "Assets/Scenes/LIARuntime.unity",
     "loaderUrl": "Build/lia.loader.js",
     "dataUrl": "Build/lia.data",

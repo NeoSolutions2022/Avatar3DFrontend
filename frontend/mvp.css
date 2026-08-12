@@ -91,6 +91,8 @@ button { cursor: pointer; }
 .avatar-heading span { color: var(--blue-dark); font-size: 9px; font-weight: 900; letter-spacing: .15em; }
 .avatar-heading h2 { margin: 6px 0 0; color: var(--navy); font-size: 20px; letter-spacing: -.02em; }
 .avatar-heading-actions { display: flex; align-items: center; gap: 9px; }
+.avatar-float-toggle { display: none; height: 30px; padding: 0 10px; border: 1px solid #d5e3ef; border-radius: 9px; color: var(--blue-dark); background: #f4faff; font-size: 10px; font-weight: 850; }
+.avatar-float-toggle.active { color: white; border-color: transparent; background: var(--blue-dark); }
 .avatar-switcher { display: flex; align-items: center; padding: 3px; border: 1px solid #dbe6f0; border-radius: 11px; background: #f2f6fa; }
 .avatar-switcher button { height: 30px; min-width: 54px; padding: 0 10px; border: 0; border-radius: 8px; color: #66758b; background: transparent; font-size: 11px; font-weight: 800; transition: color .18s, background .18s, box-shadow .18s; }
 .avatar-switcher button:hover:not(:disabled) { color: var(--blue-dark); }
@@ -99,7 +101,7 @@ button { cursor: pointer; }
 .avatar-live { padding: 7px 10px; border-radius: 999px; color: #68778b !important; background: #edf1f6; letter-spacing: 0 !important; }
 .avatar-live.ready { color: #087c77 !important; background: #def8f3; }
 .avatar-stage { position: relative; min-height: 0; margin: 16px 16px 0; overflow: hidden; border: 1px solid #dfe8f1; border-radius: 16px; background: white; box-shadow: inset 0 0 45px rgba(15, 67, 113, .035); }
-#unity-canvas { width: 100%; height: 100%; display: block; background: white; }
+#unity-canvas { width: 100%; height: 100%; display: block; background: #f4f8fc; image-rendering: auto; }
 .avatar-tools { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; align-items: center; padding: 4px; border: 1px solid rgba(207, 220, 234, .88); border-radius: 12px; background: rgba(255, 255, 255, .9); box-shadow: 0 8px 24px rgba(25, 59, 97, .13); backdrop-filter: blur(10px); }
 .avatar-tools button { min-width: 32px; height: 30px; padding: 0 8px; border: 0; border-radius: 8px; color: var(--navy); background: transparent; font-size: 18px; font-weight: 700; }
 .avatar-tools button:hover:not(:disabled) { color: var(--blue-dark); background: var(--accent-soft); }
@@ -131,12 +133,12 @@ button { cursor: pointer; }
 @keyframes mic-pulse { 50% { box-shadow: 0 0 0 8px rgba(196, 59, 77, .12); } }
 
 @media (max-width: 980px) {
-  html, body { height: auto; min-height: 100%; overflow: auto; }
-  .mvp-app { height: auto; min-height: 100dvh; display: block; overflow: visible; }
-  .mvp-header { height: 66px; position: sticky; top: 0; }
-  .mvp-layout { overflow: visible; display: flex; flex-direction: column-reverse; padding: 12px; }
-  .avatar-panel { height: min(680px, 67dvh); min-height: 440px; }
-  .chat-panel { height: min(760px, 72dvh); min-height: 520px; }
+  html, body { height: 100%; min-height: 0; overflow: hidden; }
+  .mvp-app { height: 100dvh; min-height: 0; overflow: hidden; }
+  .mvp-header { height: 66px; }
+  .mvp-layout { min-height: 0; overflow: hidden; display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(300px, 43dvh) minmax(0, 1fr); gap: 12px; padding: 12px; }
+  .avatar-panel { order: 1; height: auto; min-height: 0; }
+  .chat-panel { order: 2; height: auto; min-height: 0; }
   .avatar-stage { margin-top: 12px; }
 }
 
@@ -144,15 +146,18 @@ button { cursor: pointer; }
   .mvp-header { padding: 0 14px; }
   .mvp-brand img { width: 132px; }
   .mvp-brand span, .header-status { display: none; }
-  .mvp-layout { gap: 10px; padding: 9px; }
+  .mvp-layout { grid-template-rows: minmax(260px, 42dvh) minmax(0, 1fr); gap: 9px; padding: 8px; }
   .chat-panel, .avatar-panel { border-radius: 15px; }
-  .avatar-panel { height: 66svh; min-height: 420px; grid-template-rows: 108px minmax(0, 1fr) 78px; }
-  .chat-panel { height: 72svh; min-height: 500px; grid-template-rows: minmax(0, 1fr) 76px; }
-  .avatar-heading { align-items: flex-start; padding: 15px 14px; }
-  .avatar-heading-actions { align-items: flex-end; flex-direction: column-reverse; gap: 7px; }
+  .avatar-panel { height: auto; min-height: 0; grid-template-rows: 64px minmax(0, 1fr) 62px; }
+  .chat-panel { height: auto; min-height: 0; grid-template-rows: minmax(0, 1fr) 76px; }
+  .avatar-heading { align-items: center; padding: 9px 11px; touch-action: none; }
+  .avatar-heading h2 { margin-top: 3px; font-size: 17px; }
+  .avatar-heading-actions { align-items: center; flex-direction: row; gap: 5px; }
+  .avatar-float-toggle { display: inline-flex; align-items: center; }
   .avatar-live { padding: 5px 8px; }
-  .avatar-stage { margin: 10px 10px 0; }
-  .avatar-footer { padding: 11px 13px; }
+  .avatar-stage { margin: 7px 8px 0; }
+  .avatar-footer { padding: 8px 11px; }
+  .avatar-footer button { height: 34px; }
   .chat-scroll { padding: 24px 14px; }
   .welcome { padding: 54px 20px 0; }
   .welcome p { font-size: 14px; }
@@ -161,6 +166,11 @@ button { cursor: pointer; }
   .composer input { padding: 0 12px; }
   .send-button { font-size: 13px; }
   .avatar-tools { top: 8px; right: 8px; }
+  .avatar-panel.floating { position: fixed; left: var(--float-x, 10px); top: var(--float-y, 74px); z-index: 50; width: min(86vw, 340px); height: min(46dvh, 400px); min-height: 280px; grid-template-rows: 58px minmax(0, 1fr) 58px; border-color: rgba(16, 156, 244, .28); box-shadow: 0 24px 70px rgba(9, 31, 62, .28); }
+  .avatar-panel.floating.dragging { transition: none; box-shadow: 0 30px 80px rgba(9, 31, 62, .34); }
+  .avatar-panel.floating .avatar-live { display: none; }
+  .mvp-layout.avatar-floating { grid-template-rows: minmax(0, 1fr); }
+  .mvp-layout.avatar-floating .chat-panel { grid-row: 1; }
 }
 
 @media (max-width: 380px) {

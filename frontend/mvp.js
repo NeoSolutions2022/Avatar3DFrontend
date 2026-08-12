@@ -9,6 +9,7 @@ const fallbackCatalog = {
     { id: "lia", name: "LIA", manifestUrl: "lia/manifest.json" },
   ],
 };
+const avatarZoomLevels = { asuna: 1, lia: 1.24 };
 
 let unityInstance = null;
 let pendingPose = null;
@@ -16,7 +17,6 @@ let activePose = null;
 let activePhrase = "";
 let processing = false;
 let toastTimer = null;
-let zoomLevel = 1;
 let poseLoadContext = null;
 let poseLoadTimer = null;
 let avatarCatalog = null;
@@ -24,9 +24,12 @@ let selectedAvatar = ["asuna", "lia"].includes(localStorage.getItem("neotalk-ava
   ? localStorage.getItem("neotalk-avatar")
   : "asuna";
 let selectedAvatarName = selectedAvatar === "lia" ? "LIA" : "Asuna";
+let zoomLevel = avatarZoomLevels[selectedAvatar] || 1;
 let avatarLoadSequence = 0;
 let unityLoaderScript = null;
 let activeWords = [];
+let floatingAvatar = false;
+let avatarDrag = null;
 
 const minZoom = 0.76;
 const maxZoom = 1.48;
@@ -34,7 +37,10 @@ const zoomStep = 0.12;
 
 const elements = {
   avatarCaption: document.querySelector("#avatar-caption"),
+  avatarFloatToggle: document.querySelector("#avatar-float-toggle"),
+  avatarHeading: document.querySelector(".avatar-heading"),
   avatarOptions: [...document.querySelectorAll("[data-avatar]")],
+  avatarPanel: document.querySelector(".avatar-panel"),
   avatarLive: document.querySelector("#avatar-live"),
   avatarWords: document.querySelector("#avatar-words"),
   canvas: document.querySelector("#unity-canvas"),
@@ -45,6 +51,7 @@ const elements = {
   loader: document.querySelector("#unity-loader"),
   loaderMessage: document.querySelector("#loader-message"),
   loaderTitle: document.querySelector("#loader-title"),
+  layout: document.querySelector(".mvp-layout"),
   messages: document.querySelector("#messages"),
   micButton: document.querySelector("#mic-button"),
   progress: document.querySelector("#unity-progress"),
@@ -147,6 +154,8 @@ async function initializeAvatar(avatarId = selectedAvatar) {
   pendingPose = null;
   selectedAvatar = avatarId;
   selectedAvatarName = avatarId === "lia" ? "LIA" : "Asuna";
+  zoomLevel = avatarZoomLevels[avatarId] || 1;
+  elements.zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
   localStorage.setItem("neotalk-avatar", avatarId);
   setAvatarOptionState(true);
   elements.loader.classList.remove("hidden");
@@ -197,6 +206,8 @@ async function initializeAvatar(avatarId = selectedAvatar) {
         companyName: "NeoTalk",
         productName: `NeoTalk ${selectedAvatarName}`,
         productVersion: "2.0.0",
+        matchWebGLToCanvasSize: true,
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
       },
       (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },
     );
@@ -379,7 +390,7 @@ function playPose(pose, words, phrase, statusMessage) {
   elements.replayButton.disabled = true;
   poseLoadTimer = setTimeout(() => {
     finishPoseLoad(false, `${selectedAvatarName} não confirmou o carregamento da pose.`);
-  }, 20000);
+  }, 45000);
 }
 
 window.addEventListener("avatar3d-pose-load", (event) => {
@@ -486,6 +497,7 @@ elements.replayButton.addEventListener("click", () => {
 
 function setZoom(nextZoom) {
   zoomLevel = Math.min(maxZoom, Math.max(minZoom, nextZoom));
+  avatarZoomLevels[selectedAvatar] = zoomLevel;
   sendUnity("SetCameraZoom", zoomLevel.toFixed(2));
   elements.zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
   elements.zoomOutButton.disabled = !unityInstance || zoomLevel <= minZoom;
@@ -495,6 +507,86 @@ function setZoom(nextZoom) {
 elements.zoomOutButton.addEventListener("click", () => setZoom(zoomLevel - zoomStep));
 elements.zoomInButton.addEventListener("click", () => setZoom(zoomLevel + zoomStep));
 elements.zoomResetButton.addEventListener("click", () => setZoom(1));
+
+function clampFloatingAvatar() {
+  if (!floatingAvatar || window.innerWidth > 560) return;
+  const rect = elements.avatarPanel.getBoundingClientRect();
+  const margin = 8;
+  const left = Math.min(
+    Math.max(margin, rect.left),
+    Math.max(margin, window.innerWidth - rect.width - margin),
+  );
+  const top = Math.min(
+    Math.max(64 + margin, rect.top),
+    Math.max(64 + margin, window.innerHeight - rect.height - margin),
+  );
+  elements.avatarPanel.style.setProperty("--float-x", `${left}px`);
+  elements.avatarPanel.style.setProperty("--float-y", `${top}px`);
+}
+
+function setFloatingAvatar(enabled) {
+  floatingAvatar = Boolean(enabled) && window.innerWidth <= 560;
+  elements.avatarPanel.classList.toggle("floating", floatingAvatar);
+  elements.layout.classList.toggle("avatar-floating", floatingAvatar);
+  elements.avatarFloatToggle.classList.toggle("active", floatingAvatar);
+  elements.avatarFloatToggle.setAttribute("aria-pressed", String(floatingAvatar));
+  elements.avatarFloatToggle.textContent = floatingAvatar ? "Fixar" : "Flutuar";
+  elements.avatarFloatToggle.title = floatingAvatar
+    ? "Fixar avatar na página"
+    : "Usar avatar flutuante";
+
+  if (floatingAvatar) {
+    const width = Math.min(window.innerWidth * 0.86, 340);
+    elements.avatarPanel.style.setProperty("--float-x", `${window.innerWidth - width - 10}px`);
+    elements.avatarPanel.style.setProperty("--float-y", "74px");
+    requestAnimationFrame(clampFloatingAvatar);
+  } else {
+    elements.avatarPanel.style.removeProperty("--float-x");
+    elements.avatarPanel.style.removeProperty("--float-y");
+  }
+  window.dispatchEvent(new Event("resize"));
+}
+
+elements.avatarFloatToggle.addEventListener("click", () => {
+  setFloatingAvatar(!floatingAvatar);
+});
+
+elements.avatarHeading.addEventListener("pointerdown", (event) => {
+  if (!floatingAvatar || event.button !== 0 || event.target.closest("button")) return;
+  const rect = elements.avatarPanel.getBoundingClientRect();
+  avatarDrag = {
+    pointerId: event.pointerId,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+  };
+  elements.avatarHeading.setPointerCapture(event.pointerId);
+  elements.avatarPanel.classList.add("dragging");
+  event.preventDefault();
+});
+
+elements.avatarHeading.addEventListener("pointermove", (event) => {
+  if (!avatarDrag || avatarDrag.pointerId !== event.pointerId) return;
+  elements.avatarPanel.style.setProperty(
+    "--float-x", `${event.clientX - avatarDrag.offsetX}px`,
+  );
+  elements.avatarPanel.style.setProperty(
+    "--float-y", `${event.clientY - avatarDrag.offsetY}px`,
+  );
+  clampFloatingAvatar();
+});
+
+function stopAvatarDrag(event) {
+  if (!avatarDrag || avatarDrag.pointerId !== event.pointerId) return;
+  avatarDrag = null;
+  elements.avatarPanel.classList.remove("dragging");
+}
+
+elements.avatarHeading.addEventListener("pointerup", stopAvatarDrag);
+elements.avatarHeading.addEventListener("pointercancel", stopAvatarDrag);
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 560 && floatingAvatar) setFloatingAvatar(false);
+  else requestAnimationFrame(clampFloatingAvatar);
+});
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
