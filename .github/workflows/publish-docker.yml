@@ -24,16 +24,7 @@ jobs:
           lfs: true
 
       - name: Verificar binarios WebGL
-        shell: bash
-        run: |
-          data_size=$(stat -c%s webgl/Build/webgl.data)
-          wasm_size=$(stat -c%s webgl/Build/webgl.wasm)
-
-          echo "webgl.data: ${data_size} bytes"
-          echo "webgl.wasm: ${wasm_size} bytes"
-
-          test "${data_size}" -gt 100000000
-          test "${wasm_size}" -gt 40000000
+        run: python3 scripts/validate_webgl_builds.py
 
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
