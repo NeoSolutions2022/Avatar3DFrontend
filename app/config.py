@@ -30,6 +30,14 @@ class Settings:
         for value in os.getenv("AVATAR3D_CORS_ORIGINS", "*").split(",")
         if value.strip()
     )
+    widget_origins: tuple[str, ...] = tuple(
+        value.strip()
+        for value in os.getenv(
+            "AVATAR3D_WIDGET_ORIGINS",
+            os.getenv("AVATAR3D_CORS_ORIGINS", "*"),
+        ).split(",")
+        if value.strip()
+    )
     api_key: str = os.getenv("AVATAR3D_API_KEY", "")
     max_pose_bytes: int = int(os.getenv("AVATAR3D_MAX_POSE_BYTES", "20971520"))
     max_pose_frames: int = int(os.getenv("AVATAR3D_MAX_POSE_FRAMES", "10000"))

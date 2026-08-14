@@ -133,6 +133,17 @@ def health() -> dict:
     }
 
 
+@app.get("/api/v1/widget/config", include_in_schema=False)
+def widget_config() -> JSONResponse:
+    return JSONResponse(
+        content={
+            "allowed_origins": list(settings.widget_origins),
+            "max_phrase_length": 500,
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.post("/api/v1/mvp/sign", status_code=202)
 def mvp_sign(payload: MvpSignRequest) -> JSONResponse:
     phrase = " ".join(payload.phrase.split())
@@ -312,3 +323,26 @@ def mvp_index() -> FileResponse | JSONResponse:
             content={"detail": "MVP frontend assets are not installed"},
         )
     return FileResponse(path)
+
+
+@app.get(
+    "/widget",
+    response_class=HTMLResponse,
+    response_model=None,
+    include_in_schema=False,
+)
+def widget_index() -> FileResponse | JSONResponse:
+    path = settings.frontend_dir / "widget.html"
+    if not path.is_file():
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "widget frontend assets are not installed"},
+        )
+    frame_ancestors = " ".join(settings.widget_origins) or "'none'"
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Security-Policy": f"frame-ancestors {frame_ancestors}",
+        },
+    )

@@ -13,6 +13,7 @@ Abra:
 
 - Player: `http://localhost:8080`
 - MVP do chat: `http://localhost:8080/mvp`
+- Widget incorporavel: `http://localhost:8080/widget?avatar=lia`
 - OpenAPI: `http://localhost:8080/docs`
 - Healthcheck: `http://localhost:8080/api/v1/health`
 
@@ -55,6 +56,12 @@ NEOTALK_MVP_POSE_FPS=30
 
 O botao de microfone usa o reconhecimento de voz disponibilizado pelo navegador e preenche o mesmo campo de mensagem do chat.
 
+## Widget para sites externos
+
+A rota `/widget` exibe somente o avatar e recebe frases do site hospedeiro por `window.postMessage`. O processamento continua no backend desta plataforma; portanto, a chave NeoTalk nunca deve ser colocada no site externo.
+
+Configure `AVATAR3D_WIDGET_ORIGINS` com as origens exatas autorizadas e siga o guia de integracao em [WIDGET_INTEGRATION.md](WIDGET_INTEGRATION.md).
+
 ## Estrutura
 
 ```text
@@ -72,6 +79,7 @@ compose.yaml         servico e volume persistente
 |---|---:|---|
 | `AVATAR3D_HTTP_PORT` | `8080` | Porta publicada pelo Docker |
 | `AVATAR3D_CORS_ORIGINS` | `*` | Origens permitidas, separadas por virgula |
+| `AVATAR3D_WIDGET_ORIGINS` | valor de `AVATAR3D_CORS_ORIGINS` | Sites que podem incorporar e controlar `/widget` |
 | `AVATAR3D_API_KEY` | vazio | Protege os endpoints de escrita |
 | `AVATAR3D_MAX_POSE_BYTES` | `20971520` | Limite do upload |
 | `AVATAR3D_MAX_POSE_FRAMES` | `10000` | Limite de frames |
