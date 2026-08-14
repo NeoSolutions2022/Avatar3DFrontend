@@ -14,6 +14,7 @@ os.environ["AVATAR3D_DATA_DIR"] = str(TEST_DATA_DIR)
 os.environ["AVATAR3D_FRONTEND_DIR"] = str(PLATFORM_ROOT / "frontend")
 os.environ["AVATAR3D_WEBGL_DIR"] = str(PLATFORM_ROOT / "webgl")
 os.environ["NEOTALK_API_KEY"] = "test-key"
+os.environ["AVATAR3D_WIDGET_ORIGINS"] = "https://portal.example,http://localhost:3000"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -94,6 +95,24 @@ class PoseApiTests(unittest.TestCase):
         response = self.client.get("/mvp")
         self.assertEqual(response.status_code, 200)
         self.assertIn("NeoTalk Chat", response.text)
+
+    def test_widget_page_and_public_config_are_available(self) -> None:
+        response = self.client.get("/widget")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("NeoTalk Avatar Widget", response.text)
+        self.assertEqual(
+            response.headers["content-security-policy"],
+            "frame-ancestors https://portal.example http://localhost:3000",
+        )
+
+        config = self.client.get("/api/v1/widget/config")
+        self.assertEqual(config.status_code, 200)
+        self.assertEqual(
+            config.json()["allowed_origins"],
+            ["https://portal.example", "http://localhost:3000"],
+        )
+        self.assertEqual(config.json()["max_phrase_length"], 500)
+        self.assertEqual(config.headers["cache-control"], "no-store")
 
     @patch("app.main.neotalk_client.download_pose")
     @patch("app.main.neotalk_client.task_status")

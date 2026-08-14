@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Widget incorporavel dos avatares 3D NeoTalk." />
+    <title>NeoTalk Avatar Widget</title>
+    <link rel="stylesheet" href="/static/widget.css?v=20260814" />
+  </head>
+  <body>
+    <main class="widget-stage" id="widget-stage" aria-label="Avatar 3D NeoTalk">
+      <canvas id="unity-canvas" tabindex="-1" aria-label="Avatar 3D"></canvas>
+
+      <div class="widget-loader" id="widget-loader" role="status" aria-live="polite">
+        <span class="loader-pulse" aria-hidden="true"></span>
+        <strong id="loader-title">Preparando avatar</strong>
+        <span id="loader-message">Carregando o renderizador 3D...</span>
+        <span class="loader-track"><i id="unity-progress"></i></span>
+      </div>
+
+      <div class="widget-controls" id="widget-controls" hidden>
+        <button type="button" id="zoom-out" aria-label="Diminuir zoom">&minus;</button>
+        <button type="button" id="zoom-reset" aria-label="Restaurar zoom">100%</button>
+        <button type="button" id="zoom-in" aria-label="Aumentar zoom">&plus;</button>
+      </div>
+
+      <div class="widget-error" id="widget-error" role="alert" hidden></div>
+    </main>
+    <script type="module" src="/static/widget.js?v=20260814"></script>
+  </body>
+</html>
