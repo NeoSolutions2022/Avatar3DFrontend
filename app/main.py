@@ -338,11 +338,15 @@ def widget_index() -> FileResponse | JSONResponse:
             status_code=503,
             content={"detail": "widget frontend assets are not installed"},
         )
-    frame_ancestors = " ".join(settings.widget_origins) or "'none'"
+    headers = {"Cache-Control": "no-cache"}
+    # CSP does not consider opaque origins created by sandboxed preview frames
+    # to match `*`. Omitting frame-ancestors in the explicitly open mode lets
+    # tools such as Lovable preview embed the widget. Production deployments
+    # should configure exact origins and keep the restrictive CSP below.
+    if "*" not in settings.widget_origins:
+        frame_ancestors = " ".join(settings.widget_origins) or "'none'"
+        headers["Content-Security-Policy"] = f"frame-ancestors {frame_ancestors}"
     return FileResponse(
         path,
-        headers={
-            "Cache-Control": "no-cache",
-            "Content-Security-Policy": f"frame-ancestors {frame_ancestors}",
-        },
+        headers=headers,
     )

@@ -71,7 +71,13 @@ function applyBackground(value) {
 
 function postToParent(type, detail = {}) {
   if (window.parent === window) return;
-  const targetOrigin = state.trustedParentOrigin || "*";
+  // Sandboxed preview frames have the opaque serialized origin `null`, which
+  // cannot be used as a postMessage targetOrigin. In the explicitly open
+  // widget mode, reply with `*`; inbound messages are still checked by
+  // originAllowed before this origin is trusted.
+  const targetOrigin = state.trustedParentOrigin && state.trustedParentOrigin !== "null"
+    ? state.trustedParentOrigin
+    : "*";
   window.parent.postMessage({ type, avatar: state.avatar, ...detail }, targetOrigin);
 }
 

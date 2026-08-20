@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,7 +19,7 @@ os.environ["AVATAR3D_WIDGET_ORIGINS"] = "https://portal.example,http://localhost
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import app  # noqa: E402
+from app.main import app, settings as app_settings  # noqa: E402
 from app.neotalk import NeoTalkResponse  # noqa: E402
 
 
@@ -113,6 +114,15 @@ class PoseApiTests(unittest.TestCase):
         )
         self.assertEqual(config.json()["max_phrase_length"], 500)
         self.assertEqual(config.headers["cache-control"], "no-store")
+
+    def test_widget_open_mode_omits_frame_ancestors_for_sandboxed_previews(self) -> None:
+        open_settings = replace(app_settings, widget_origins=("*",))
+        with patch("app.main.settings", open_settings):
+            response = self.client.get("/widget")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("content-security-policy", response.headers)
+        self.assertEqual(response.headers["cache-control"], "no-cache")
 
     @patch("app.main.neotalk_client.download_pose")
     @patch("app.main.neotalk_client.task_status")
