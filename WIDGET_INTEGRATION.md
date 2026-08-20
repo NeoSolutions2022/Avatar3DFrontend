@@ -28,6 +28,12 @@ https://homologacao.seudominio.com:8443
 
 Reinicie/reimplante o container depois de alterar a variavel. Em producao, nao use `*`.
 
+Para previews executados dentro de iframes com `sandbox` (por exemplo, o editor
+do Lovable), use temporariamente `AVATAR3D_WIDGET_ORIGINS=*`. Nesse modo a
+plataforma nao envia `frame-ancestors`, pois a origem opaca do preview nao e
+compativel com uma allowlist CSP. Restrinja novamente a origens exatas antes de
+publicar em producao.
+
 ## 2. Codigo pronto para o site externo
 
 HTML:
