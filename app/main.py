@@ -126,7 +126,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "api_version": "2.1.0",
-        "app_version": "2026.08.22-clean-retarget.2",
+        "app_version": "2026.08.22-clean-retarget.3",
         "pose_pipeline": "original-payload-pass-through",
         "webgl_ready": webgl_ready,
         "avatars": ready_avatars,
@@ -140,7 +140,7 @@ def widget_config() -> JSONResponse:
         content={
             "allowed_origins": list(settings.widget_origins),
             "max_phrase_length": 500,
-            "app_version": "2026.08.22-clean-retarget.2",
+            "app_version": "2026.08.22-clean-retarget.3",
         },
         headers={"Cache-Control": "no-store"},
     )
