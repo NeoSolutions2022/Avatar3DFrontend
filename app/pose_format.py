@@ -113,6 +113,7 @@ class NormalizedPose:
     source_dimensions: int
     sha256: str
     low_confidence_points: int
+    coordinates_transformed: bool
 
 
 def normalize_pose(
@@ -126,24 +127,44 @@ def normalize_pose(
         raise PoseValidationError("normalization margin must be between 1.0 and 1.25")
 
     frames, source_dimensions = parse_pose(text, filename, max_frames)
-    target_lengths = estimate_lengths(frames, margin)
-    apply_reference_arm_proportions(target_lengths)
-    directions = estimate_directions(frames, source_dimensions)
-    reconstruct_depth(frames, target_lengths, directions, source_dimensions)
-    content = serialize_pose(frames, filename, source_dimensions, target_lengths)
-    encoded = content.encode("utf-8")
     low_confidence = sum(
         joint.confidence < 0.2
         for frame in frames
         for joints in frame.sections.values()
         for joint in joints.values()
     )
+
+    # Poses 3D do NeoTalk ja carregam a profundidade e as proporcoes
+    # calibradas no Unity. Reconstruir o Z ou impor comprimentos de outro
+    # clipe muda o sinal original, principalmente cotovelos e punhos.
+    if source_dimensions == 3:
+        content = text.replace("\r\n", "\n").replace("\r", "\n")
+        if not content.endswith("\n"):
+            content += "\n"
+        encoded = content.encode("utf-8")
+        return NormalizedPose(
+            content=content,
+            frame_count=len(frames),
+            source_dimensions=source_dimensions,
+            sha256=hashlib.sha256(encoded).hexdigest(),
+            low_confidence_points=low_confidence,
+            coordinates_transformed=False,
+        )
+
+    # Somente fontes 2D precisam receber profundidade canonica.
+    target_lengths = estimate_lengths(frames, margin)
+    apply_reference_arm_proportions(target_lengths)
+    directions = estimate_directions(frames, source_dimensions)
+    reconstruct_depth(frames, target_lengths, directions, source_dimensions)
+    content = serialize_pose(frames, filename, source_dimensions, target_lengths)
+    encoded = content.encode("utf-8")
     return NormalizedPose(
         content=content,
         frame_count=len(frames),
         source_dimensions=source_dimensions,
         sha256=hashlib.sha256(encoded).hexdigest(),
         low_confidence_points=low_confidence,
+        coordinates_transformed=True,
     )
 
 

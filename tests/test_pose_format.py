@@ -57,25 +57,17 @@ class PoseFormatTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.sample = first_frames(CHAIR_POSE.read_text(encoding="utf-8-sig"))
 
-    def test_normalizes_real_3d_pose(self) -> None:
-        normalized = normalize_pose(cls_text := self.sample, filename="chair.pose")
-        frames, dimensions = parse_pose(normalized.content, "normalized.pose", 10)
+    def test_preserves_real_3d_pose_coordinates(self) -> None:
+        original = self.sample.replace("\r\n", "\n").replace("\r", "\n")
+        normalized = normalize_pose(original, filename="chair.pose")
+        _, dimensions = parse_pose(normalized.content, "normalized.pose", 10)
 
         self.assertEqual(dimensions, 3)
         self.assertEqual(normalized.source_dimensions, 3)
         self.assertEqual(normalized.frame_count, 2)
-        self.assertIn("# Avatar3D normalized source: chair.pose", normalized.content)
-        self.assertGreater(len(cls_text), 1_000)
-
-        lengths_by_group: dict[str, list[float]] = {}
-        for frame in frames:
-            body = frame.sections["Body"]
-            for parent, child, group in BODY_TREE:
-                a, b = body[parent], body[child]
-                distance = math.dist((a.x, a.y, a.z), (b.x, b.y, b.z))
-                lengths_by_group.setdefault(group, []).append(distance)
-        for values in lengths_by_group.values():
-            self.assertLess(max(values) - min(values), 2e-4)
+        self.assertFalse(normalized.coordinates_transformed)
+        self.assertEqual(normalized.content, original)
+        self.assertGreater(len(original), 1_000)
 
     def test_lifts_2d_pose_to_canonical_3d(self) -> None:
         normalized = normalize_pose(as_2d(self.sample), filename="flat.pose")
@@ -83,6 +75,7 @@ class PoseFormatTests(unittest.TestCase):
         body = frames[0].sections["Body"]
 
         self.assertEqual(normalized.source_dimensions, 2)
+        self.assertTrue(normalized.coordinates_transformed)
         self.assertEqual(dimensions, 3)
         self.assertTrue(any(abs(joint.z) > 1e-5 for joint in body.values()))
 

@@ -76,7 +76,8 @@ class PoseApiTests(unittest.TestCase):
         pose_id = payload["id"]
         content = self.client.get(f"/api/v1/poses/{pose_id}/content")
         self.assertEqual(content.status_code, 200)
-        self.assertIn("# Avatar3D normalized source", content.text)
+        self.assertEqual(content.text, self.pose_text)
+        self.assertFalse(payload["normalized"])
 
         listed = self.client.get("/api/v1/poses").json()
         self.assertTrue(any(item["id"] == pose_id for item in listed["items"]))
