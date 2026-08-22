@@ -88,7 +88,7 @@ class PoseStorage:
             frame_count=normalized_pose.frame_count,
             fps=fps,
             source_dimensions=normalized_pose.source_dimensions,
-            normalized=True,
+            normalized=normalized_pose.coordinates_transformed,
             byte_count=len(normalized_bytes),
             sha256=normalized_pose.sha256,
             low_confidence_points=normalized_pose.low_confidence_points,
