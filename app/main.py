@@ -12,16 +12,16 @@ from pydantic import BaseModel, Field
 
 from .config import settings
 from .neotalk import NeoTalkApiError, NeoTalkClient
-from .pose_format import PoseValidationError, normalize_pose
+from .pose_format import PoseValidationError, validate_pose
 from .storage import PoseRecord, PoseStorage
 
 
 app = FastAPI(
     title="Avatar3D Pose API",
-    version="1.0.0",
+    version="2.1.0",
     description=(
-        "Receives 2D or 3D .pose data, normalizes it for the NeoTalk avatars, "
-        "and exposes it to the Unity WebGL players."
+        "Validates 2D or 3D .pose data without changing its coordinates and "
+        "exposes the original payload to the Unity WebGL players."
     ),
 )
 app.add_middleware(
@@ -78,10 +78,9 @@ def decode_pose(raw: bytes) -> str:
 def persist_pose(*, name: str, fps: float, raw: bytes) -> PoseRecord:
     text = decode_pose(raw)
     try:
-        normalized = normalize_pose(
+        validated = validate_pose(
             text,
             filename=Path(name).name,
-            margin=settings.normalization_margin,
             max_frames=settings.max_pose_frames,
         )
     except PoseValidationError as exception:
@@ -90,7 +89,7 @@ def persist_pose(*, name: str, fps: float, raw: bytes) -> PoseRecord:
         name=Path(name).name[:180] or "runtime.pose",
         fps=fps,
         original_content=raw,
-        normalized_pose=normalized,
+        validated_pose=validated,
     )
 
 
@@ -126,7 +125,9 @@ def health() -> dict:
     webgl_ready = expected_avatars.issubset(ready_avatars)
     return {
         "status": "ok",
-        "api_version": "1.0.0",
+        "api_version": "2.1.0",
+        "app_version": "2026.08.22-clean-retarget.1",
+        "pose_pipeline": "original-payload-pass-through",
         "webgl_ready": webgl_ready,
         "avatars": ready_avatars,
         "mvp_ready": neotalk_client.configured,
@@ -139,6 +140,7 @@ def widget_config() -> JSONResponse:
         content={
             "allowed_origins": list(settings.widget_origins),
             "max_phrase_length": 500,
+            "app_version": "2026.08.22-clean-retarget.1",
         },
         headers={"Cache-Control": "no-store"},
     )
@@ -183,6 +185,14 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
 
     pose_name = f"mvp-{task_id}.pose"
     record = storage.get_by_name(pose_name)
+    if (
+        record is not None
+        and record.normalized
+        and not storage.original_path(record.id).is_file()
+    ):
+        # Nunca reutilize uma copia historica transformada se o payload original
+        # nao existe mais; baixe novamente a fonte autoritativa.
+        record = None
     if record is None:
         file_url = upstream.payload.get("file_url")
         if not isinstance(file_url, str) or not file_url:
@@ -259,7 +269,16 @@ def get_pose(pose_id: str, request: Request) -> dict:
 @app.get("/api/v1/poses/{pose_id}/content", name="get_pose_content")
 def get_pose_content(pose_id: str) -> FileResponse:
     record = storage.get(pose_id)
-    path = storage.pose_path(pose_id)
+    if (
+        record is not None
+        and record.normalized
+        and not storage.original_path(pose_id).is_file()
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="legacy transformed pose has no original payload; submit it again",
+        )
+    path = storage.playback_path(pose_id)
     if record is None or not path.is_file():
         raise HTTPException(status_code=404, detail="pose not found")
     return FileResponse(
@@ -306,7 +325,7 @@ def index() -> FileResponse | JSONResponse:
             status_code=503,
             content={"detail": "frontend assets are not installed"},
         )
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "no-store"})
 
 
 @app.get(
@@ -322,7 +341,7 @@ def mvp_index() -> FileResponse | JSONResponse:
             status_code=503,
             content={"detail": "MVP frontend assets are not installed"},
         )
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "no-store"})
 
 
 @app.get(

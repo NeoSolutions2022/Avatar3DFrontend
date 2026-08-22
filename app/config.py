@@ -42,9 +42,6 @@ class Settings:
     max_pose_bytes: int = int(os.getenv("AVATAR3D_MAX_POSE_BYTES", "20971520"))
     max_pose_frames: int = int(os.getenv("AVATAR3D_MAX_POSE_FRAMES", "10000"))
     keep_originals: bool = _as_bool(os.getenv("AVATAR3D_KEEP_ORIGINALS", "true"))
-    normalization_margin: float = float(
-        os.getenv("AVATAR3D_NORMALIZATION_MARGIN", "1.02")
-    )
     log_level: str = os.getenv("AVATAR3D_LOG_LEVEL", "info")
     neotalk_api_base_url: str = os.getenv(
         "NEOTALK_API_BASE_URL",
