@@ -6,7 +6,7 @@
     "dataUrl": "Build/lia.data",
     "frameworkUrl": "Build/lia.framework.js",
     "codeUrl": "Build/lia.wasm",
-    "buildBytes": "111530607",
+    "buildBytes": "111530801",
     "unityVersion": "6000.2.2f1",
-    "builtAtUtc": "2026-08-22T18:59:14.6614145Z"
+    "builtAtUtc": "2026-08-22T19:22:46.1912024Z"
 }

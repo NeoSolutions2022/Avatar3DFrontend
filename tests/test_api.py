@@ -58,7 +58,7 @@ class PoseApiTests(unittest.TestCase):
         health = self.client.get("/api/v1/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["status"], "ok")
-        self.assertEqual(health.json()["app_version"], "2026.08.22-clean-retarget.3")
+        self.assertEqual(health.json()["app_version"], "2026.08.22-clean-retarget.4")
         self.assertEqual(
             health.json()["pose_pipeline"], "original-payload-pass-through"
         )
@@ -119,14 +119,14 @@ class PoseApiTests(unittest.TestCase):
         response = self.client.get("/mvp")
         self.assertEqual(response.status_code, 200)
         self.assertIn("NeoTalk Chat", response.text)
-        self.assertIn("v2026.08.22-clean-retarget.3", response.text)
+        self.assertIn("v2026.08.22-clean-retarget.4", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_widget_page_and_public_config_are_available(self) -> None:
         response = self.client.get("/widget")
         self.assertEqual(response.status_code, 200)
         self.assertIn("NeoTalk Avatar Widget", response.text)
-        self.assertIn("v2026.08.22-clean-retarget.3", response.text)
+        self.assertIn("v2026.08.22-clean-retarget.4", response.text)
         self.assertEqual(
             response.headers["content-security-policy"],
             "frame-ancestors https://portal.example http://localhost:3000",
@@ -140,7 +140,7 @@ class PoseApiTests(unittest.TestCase):
         )
         self.assertEqual(config.json()["max_phrase_length"], 500)
         self.assertEqual(
-            config.json()["app_version"], "2026.08.22-clean-retarget.3"
+            config.json()["app_version"], "2026.08.22-clean-retarget.4"
         )
         self.assertEqual(config.headers["cache-control"], "no-store")
 
