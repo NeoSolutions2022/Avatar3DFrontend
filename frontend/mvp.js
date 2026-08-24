@@ -42,6 +42,7 @@ const elements = {
   avatarOptions: [...document.querySelectorAll("[data-avatar]")],
   avatarPanel: document.querySelector(".avatar-panel"),
   avatarLive: document.querySelector("#avatar-live"),
+  appVersion: document.querySelector("#app-version"),
   avatarWords: document.querySelector("#avatar-words"),
   canvas: document.querySelector("#unity-canvas"),
   chatScroll: document.querySelector("#chat-scroll"),
@@ -106,6 +107,12 @@ function sendUnity(method, value) {
   if (value === undefined) unityInstance.SendMessage(runtimeObject, method);
   else unityInstance.SendMessage(runtimeObject, method, String(value));
   return true;
+}
+
+function runtimeAssetUrl(value, runtimeBase, manifest) {
+  const url = new URL(value, runtimeBase);
+  url.searchParams.set("build", manifest.builtAtUtc || "20260822-clean5");
+  return url.href;
 }
 
 function setAvatarOptionState(isLoading = false) {
@@ -187,7 +194,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
     runtimeObject = manifest.runtimeObject || runtimeObject;
     const runtimeBase = new URL("./", manifestUrl);
     const script = document.createElement("script");
-    script.src = new URL(manifest.loaderUrl, runtimeBase).href;
+    script.src = runtimeAssetUrl(manifest.loaderUrl, runtimeBase, manifest);
     script.async = true;
     unityLoaderScript = script;
     document.body.appendChild(script);
@@ -199,13 +206,13 @@ async function initializeAvatar(avatarId = selectedAvatar) {
     const nextInstance = await createUnityInstance(
       elements.canvas,
       {
-        dataUrl: new URL(manifest.dataUrl, runtimeBase).href,
-        frameworkUrl: new URL(manifest.frameworkUrl, runtimeBase).href,
-        codeUrl: new URL(manifest.codeUrl, runtimeBase).href,
+        dataUrl: runtimeAssetUrl(manifest.dataUrl, runtimeBase, manifest),
+        frameworkUrl: runtimeAssetUrl(manifest.frameworkUrl, runtimeBase, manifest),
+        codeUrl: runtimeAssetUrl(manifest.codeUrl, runtimeBase, manifest),
         streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
         companyName: "NeoTalk",
         productName: `NeoTalk ${selectedAvatarName}`,
-        productVersion: "2.0.0",
+        productVersion: "2026.08.22-clean-retarget.5",
         matchWebGLToCanvasSize: true,
         // LIA has finer facial and hand geometry. A slightly higher cap keeps
         // fingers and blend-shape contours crisp on high-density mobile screens
@@ -223,6 +230,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
       return;
     }
     unityInstance = nextInstance;
+    elements.appVersion.title = `${selectedAvatarName} WebGL ${manifest.builtAtUtc || "sem data"}`;
     sendUnity("SetBackgroundColor", "#ffffff");
     sendUnity("SetCameraZoom", zoomLevel.toFixed(2));
     sendUnity("PausePlayback");

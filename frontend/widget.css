@@ -126,6 +126,20 @@ button { font: inherit; }
   background: rgba(255, 240, 240, .96);
 }
 
+.app-version {
+  position: absolute;
+  z-index: 2;
+  left: 8px;
+  bottom: 7px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: #52657d;
+  background: rgba(255, 255, 255, .76);
+  font-size: 8px;
+  font-weight: 750;
+  pointer-events: none;
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {

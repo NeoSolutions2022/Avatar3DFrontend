@@ -39,7 +39,7 @@ const pose = await response.json();
 avatarIframe.src = pose.player_url;
 ```
 
-A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O movimento e validado, normalizado e persistido antes de ser entregue ao player.
+A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O arquivo e validado e entregue ao player exatamente como foi recebido, sem normalizacao de eixos, escala, proporcoes ou profundidade.
 
 ## Chat MVP
 
@@ -65,7 +65,7 @@ Configure `AVATAR3D_WIDGET_ORIGINS` com as origens exatas autorizadas e siga o g
 ## Estrutura
 
 ```text
-app/                 FastAPI, normalizacao e SQLite
+app/                 FastAPI, validacao pass-through e SQLite
 frontend/            interface web e integracao JavaScript
 tests/               testes de formato e API
 webgl/               catalogo e builds Unity WebGL de Asuna e LIA
@@ -84,7 +84,6 @@ compose.yaml         servico e volume persistente
 | `AVATAR3D_MAX_POSE_BYTES` | `20971520` | Limite do upload |
 | `AVATAR3D_MAX_POSE_FRAMES` | `10000` | Limite de frames |
 | `AVATAR3D_KEEP_ORIGINALS` | `true` | Preserva o arquivo recebido |
-| `AVATAR3D_NORMALIZATION_MARGIN` | `1.02` | Margem dos comprimentos dos ossos |
 
 Veja todas as configuracoes em `.env.example`.
 

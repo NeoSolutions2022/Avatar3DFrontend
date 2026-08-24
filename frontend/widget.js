@@ -32,6 +32,7 @@ const elements = {
   progress: document.querySelector("#unity-progress"),
   controls: document.querySelector("#widget-controls"),
   error: document.querySelector("#widget-error"),
+  appVersion: document.querySelector("#app-version"),
   zoomOut: document.querySelector("#zoom-out"),
   zoomReset: document.querySelector("#zoom-reset"),
   zoomIn: document.querySelector("#zoom-in"),
@@ -116,6 +117,12 @@ function sendUnity(method, value) {
   return true;
 }
 
+function runtimeAssetUrl(value, runtimeBase, manifest) {
+  const url = new URL(value, runtimeBase);
+  url.searchParams.set("build", manifest.builtAtUtc || "20260822-clean5");
+  return url.href;
+}
+
 function refreshZoomLabel() {
   elements.zoomReset.textContent = `${Math.round(state.zoom * 100)}%`;
 }
@@ -189,7 +196,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   const runtimeBase = new URL("./", manifestUrl);
 
   const script = document.createElement("script");
-  script.src = new URL(manifest.loaderUrl, runtimeBase).href;
+  script.src = runtimeAssetUrl(manifest.loaderUrl, runtimeBase, manifest);
   script.async = true;
   state.loaderScript = script;
   document.body.appendChild(script);
@@ -201,13 +208,13 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   const instance = await createUnityInstance(
     elements.canvas,
     {
-      dataUrl: new URL(manifest.dataUrl, runtimeBase).href,
-      frameworkUrl: new URL(manifest.frameworkUrl, runtimeBase).href,
-      codeUrl: new URL(manifest.codeUrl, runtimeBase).href,
+      dataUrl: runtimeAssetUrl(manifest.dataUrl, runtimeBase, manifest),
+      frameworkUrl: runtimeAssetUrl(manifest.frameworkUrl, runtimeBase, manifest),
+      codeUrl: runtimeAssetUrl(manifest.codeUrl, runtimeBase, manifest),
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2.0.0",
+      productVersion: "2026.08.22-clean-retarget.5",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "lia" ? 2.25 : 2),
     },
@@ -220,6 +227,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
 
   state.unity = instance;
+  elements.appVersion.title = `${avatar.name} WebGL ${manifest.builtAtUtc || "sem data"}`;
   sendUnity("SetBackgroundColor", state.background);
   sendUnity("SetCameraZoom", state.zoom.toFixed(2));
   sendUnity("SetLoop", state.loop ? "true" : "false");
@@ -228,7 +236,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   elements.canvas.setAttribute("aria-label", `Avatar ${avatar.name} 3D`);
   elements.loader.classList.add("hidden");
   emitStatus("ready");
-  postToParent("neotalk:ready", { version: "1.0", capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"] });
+  postToParent("neotalk:ready", { version: "2026.08.22-clean-retarget.5", capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"] });
 
   if (resumePose) await loadPose(resumePose);
 }

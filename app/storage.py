@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -7,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .config import Settings
-from .pose_format import NormalizedPose
+from .pose_format import ValidatedPose
 
 
 @dataclass(frozen=True)
@@ -76,26 +77,28 @@ class PoseStorage:
         name: str,
         fps: float,
         original_content: bytes,
-        normalized_pose: NormalizedPose,
+        validated_pose: ValidatedPose,
     ) -> PoseRecord:
         pose_id = str(uuid4())
         created_at = datetime.now(timezone.utc).isoformat()
-        normalized_bytes = normalized_pose.content.encode("utf-8")
+        # O arquivo reproduzido e sempre o payload original. O parser apenas
+        # valida metadados; nenhuma copia recalibrada participa do playback.
+        pose_bytes = original_content
         record = PoseRecord(
             id=pose_id,
             name=name,
             created_at=created_at,
-            frame_count=normalized_pose.frame_count,
+            frame_count=validated_pose.frame_count,
             fps=fps,
-            source_dimensions=normalized_pose.source_dimensions,
-            normalized=normalized_pose.coordinates_transformed,
-            byte_count=len(normalized_bytes),
-            sha256=normalized_pose.sha256,
-            low_confidence_points=normalized_pose.low_confidence_points,
+            source_dimensions=validated_pose.source_dimensions,
+            normalized=False,
+            byte_count=len(pose_bytes),
+            sha256=hashlib.sha256(pose_bytes).hexdigest(),
+            low_confidence_points=validated_pose.low_confidence_points,
         )
 
-        normalized_path = self.pose_path(pose_id)
-        normalized_path.write_bytes(normalized_bytes)
+        pose_path = self.pose_path(pose_id)
+        pose_path.write_bytes(pose_bytes)
         if self.config.keep_originals:
             (self.originals_dir / f"{pose_id}.pose").write_bytes(original_content)
 
@@ -123,7 +126,7 @@ class PoseStorage:
                     ),
                 )
         except Exception:
-            normalized_path.unlink(missing_ok=True)
+            pose_path.unlink(missing_ok=True)
             if self.config.keep_originals:
                 (self.originals_dir / f"{pose_id}.pose").unlink(missing_ok=True)
             raise
@@ -162,6 +165,14 @@ class PoseStorage:
 
     def pose_path(self, pose_id: str) -> Path:
         return self.poses_dir / f"{pose_id}.pose"
+
+    def original_path(self, pose_id: str) -> Path:
+        return self.originals_dir / f"{pose_id}.pose"
+
+    def playback_path(self, pose_id: str) -> Path:
+        """Prefere o payload original, inclusive para registros antigos."""
+        original_path = self.original_path(pose_id)
+        return original_path if original_path.is_file() else self.pose_path(pose_id)
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> PoseRecord:

@@ -1,9 +1,11 @@
 .env
 .venv/
 data/
+.local-data/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 *.log
 *.png
 !frontend/assets/*.png
+!webgl/*/TemplateData/*.png
