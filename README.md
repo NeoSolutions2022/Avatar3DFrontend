@@ -13,7 +13,7 @@ Abra:
 
 - Player: `http://localhost:8080`
 - MVP do chat: `http://localhost:8080/mvp`
-- Widget incorporavel: `http://localhost:8080/widget?avatar=lia`
+- Widget incorporavel: `http://localhost:8080/widget?avatar=lia` (aceita tambem `asuna` e `elia`)
 - OpenAPI: `http://localhost:8080/docs`
 - Healthcheck: `http://localhost:8080/api/v1/health`
 
@@ -68,7 +68,7 @@ Configure `AVATAR3D_WIDGET_ORIGINS` com as origens exatas autorizadas e siga o g
 app/                 FastAPI, validacao pass-through e SQLite
 frontend/            interface web e integracao JavaScript
 tests/               testes de formato e API
-webgl/               catalogo e builds Unity WebGL de Asuna e LIA
+webgl/               catalogo e builds Unity WebGL de Asuna, LIA e ELIA
 Dockerfile           imagem unica para API, frontend e WebGL
 compose.yaml         servico e volume persistente
 ```
@@ -97,6 +97,6 @@ python -m venv .venv
 
 Os arquivos `webgl/*/Build/*.data` e `*.wasm` usam Git LFS. Instale o Git LFS antes de clonar ou publicar este repositorio.
 
-Para atualizar os avatares, execute `BuildAvatarWebGL.BuildAllFromCommandLine` no projeto Unity original e substitua o conteudo de `webgl/`. O arquivo `webgl/catalog.json` lista os avatares e cada subpasta (`webgl/asuna` e `webgl/lia`) possui seu proprio `manifest.json` e runtime.
+Para atualizar os avatares, execute `BuildAvatarWebGL.BuildAllFromCommandLine` no projeto Unity original e substitua o conteudo de `webgl/`. O arquivo `webgl/catalog.json` lista os avatares e cada subpasta (`webgl/asuna`, `webgl/lia` e `webgl/elia`) possui seu proprio `manifest.json` e runtime. Para compilar somente a nova variante, use `BuildAvatarWebGL.BuildEliaFromCommandLine`.
 
 Antes de publicar o repositorio, confirme que a licenca do modelo Asuna permite redistribuir os binarios WebGL gerados.

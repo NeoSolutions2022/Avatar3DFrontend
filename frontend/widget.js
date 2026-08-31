@@ -1,6 +1,6 @@
 const params = new URLSearchParams(window.location.search);
-const supportedAvatars = new Set(["asuna", "lia"]);
-const defaults = { asuna: 1, lia: 1.28 };
+const supportedAvatars = new Set(["asuna", "lia", "elia"]);
+const defaults = { asuna: 1, lia: 1.28, elia: 1.28 };
 const minZoom = 0.76;
 const maxZoom = 1.48;
 const pollIntervalMs = 2200;
@@ -119,7 +119,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20260822-clean5");
+  url.searchParams.set("build", manifest.builtAtUtc || "20260831-elia2");
   return url.href;
 }
 
@@ -178,7 +178,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   if (!params.has("zoom")) state.zoom = defaults[avatarId];
   clearError();
   elements.loader.classList.remove("hidden");
-  elements.loaderTitle.textContent = `Preparando ${avatarId === "lia" ? "LIA" : "Asuna"}`;
+  elements.loaderTitle.textContent = `Preparando ${avatarId === "asuna" ? "Asuna" : avatarId.toUpperCase()}`;
   elements.loaderMessage.textContent = "Carregando o renderizador 3D...";
   elements.progress.style.width = "0%";
   emitStatus("loading_avatar");
@@ -214,9 +214,9 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.08.22-clean-retarget.5",
+      productVersion: "2026.08.31-elia.2",
       matchWebGLToCanvasSize: true,
-      devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "lia" ? 2.25 : 2),
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
     (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },
   );
@@ -236,7 +236,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   elements.canvas.setAttribute("aria-label", `Avatar ${avatar.name} 3D`);
   elements.loader.classList.add("hidden");
   emitStatus("ready");
-  postToParent("neotalk:ready", { version: "2026.08.22-clean-retarget.5", capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"] });
+  postToParent("neotalk:ready", { version: "2026.08.31-elia.2", capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"] });
 
   if (resumePose) await loadPose(resumePose);
 }

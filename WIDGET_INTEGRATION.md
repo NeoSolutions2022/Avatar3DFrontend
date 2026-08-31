@@ -1,6 +1,6 @@
 # Integracao do widget de avatar NeoTalk
 
-Este guia e para o time que vai exibir somente a caixa da LIA ou da Asuna em um site externo e enviar frases para ela sinalizar.
+Este guia e para o time que vai exibir somente a caixa da LIA, ELIA ou Asuna em um site externo e enviar frases para ela sinalizar.
 
 ## Contrato da integracao
 
@@ -117,7 +117,7 @@ Registre o listener de `message` antes de permitir que o usuario envie uma frase
 
 | Parametro | Valores | Padrao | Finalidade |
 |---|---|---|---|
-| `avatar` | `lia` ou `asuna` | `lia` | Avatar inicial |
+| `avatar` | `lia`, `elia` ou `asuna` | `lia` | Avatar inicial |
 | `phrase` | texto, codificado na URL | vazio | Frase executada uma vez apos o carregamento |
 | `loop` | `1`/`true` ou `0`/`false` | `1` | Repeticao automatica do sinal |
 | `zoom` | `0.76` a `1.48` | por avatar | Enquadramento inicial |
@@ -149,6 +149,7 @@ Todos os comandos sao enviados para `avatarFrame.contentWindow` com o dominio ex
 
 // Trocar o avatar e manter a pose atual.
 { type: "neotalk:set-avatar", avatar: "asuna" }
+{ type: "neotalk:set-avatar", avatar: "elia" }
 
 // Ajustes visuais.
 { type: "neotalk:set-zoom", zoom: 1.2 }
@@ -166,7 +167,7 @@ Limites:
 - `phrase`: de 1 a 500 caracteres.
 - `zoom`: de `0.76` a `1.48`.
 - `background`: formato hexadecimal completo `#RRGGBB`.
-- `avatar`: somente `lia` ou `asuna`.
+- `avatar`: somente `lia`, `elia` ou `asuna`.
 
 ## 5. Eventos emitidos pelo widget
 

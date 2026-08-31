@@ -10,6 +10,11 @@
             "id": "lia",
             "name": "LIA",
             "manifestUrl": "lia/manifest.json"
+        },
+        {
+            "id": "elia",
+            "name": "ELIA",
+            "manifestUrl": "elia/manifest.json"
         }
     ]
 }

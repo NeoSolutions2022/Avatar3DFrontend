@@ -7,9 +7,11 @@ const fallbackCatalog = {
   avatars: [
     { id: "asuna", name: "Asuna", manifestUrl: "asuna/manifest.json" },
     { id: "lia", name: "LIA", manifestUrl: "lia/manifest.json" },
+    { id: "elia", name: "ELIA", manifestUrl: "elia/manifest.json" },
   ],
 };
-const avatarZoomLevels = { asuna: 1, lia: 1.28 };
+const avatarZoomLevels = { asuna: 1, lia: 1.28, elia: 1.28 };
+const supportedAvatars = new Set(["asuna", "lia", "elia"]);
 
 let unityInstance = null;
 let pendingPose = null;
@@ -20,10 +22,10 @@ let toastTimer = null;
 let poseLoadContext = null;
 let poseLoadTimer = null;
 let avatarCatalog = null;
-let selectedAvatar = ["asuna", "lia"].includes(localStorage.getItem("neotalk-avatar"))
+let selectedAvatar = supportedAvatars.has(localStorage.getItem("neotalk-avatar"))
   ? localStorage.getItem("neotalk-avatar")
   : "asuna";
-let selectedAvatarName = selectedAvatar === "lia" ? "LIA" : "Asuna";
+let selectedAvatarName = selectedAvatar === "asuna" ? "Asuna" : selectedAvatar.toUpperCase();
 let zoomLevel = avatarZoomLevels[selectedAvatar] || 1;
 let avatarLoadSequence = 0;
 let unityLoaderScript = null;
@@ -111,7 +113,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20260822-clean5");
+  url.searchParams.set("build", manifest.builtAtUtc || "20260831-elia2");
   return url.href;
 }
 
@@ -160,7 +162,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
   poseLoadContext = null;
   pendingPose = null;
   selectedAvatar = avatarId;
-  selectedAvatarName = avatarId === "lia" ? "LIA" : "Asuna";
+  selectedAvatarName = avatarId === "asuna" ? "Asuna" : avatarId.toUpperCase();
   zoomLevel = avatarZoomLevels[avatarId] || 1;
   elements.zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
   localStorage.setItem("neotalk-avatar", avatarId);
@@ -212,14 +214,14 @@ async function initializeAvatar(avatarId = selectedAvatar) {
         streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
         companyName: "NeoTalk",
         productName: `NeoTalk ${selectedAvatarName}`,
-        productVersion: "2026.08.22-clean-retarget.5",
+        productVersion: "2026.08.31-elia.2",
         matchWebGLToCanvasSize: true,
         // LIA has finer facial and hand geometry. A slightly higher cap keeps
         // fingers and blend-shape contours crisp on high-density mobile screens
         // without paying the cost of an unrestricted 3x/4x WebGL framebuffer.
         devicePixelRatio: Math.min(
           window.devicePixelRatio || 1,
-          selectedAvatar === "lia" ? 2.25 : 2,
+          selectedAvatar === "asuna" ? 2 : 2.25,
         ),
       },
       (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },

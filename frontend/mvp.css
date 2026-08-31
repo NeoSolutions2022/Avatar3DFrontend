@@ -154,8 +154,10 @@ button { cursor: pointer; }
   .avatar-panel { height: auto; min-height: 0; grid-template-rows: 64px minmax(0, 1fr) 62px; }
   .chat-panel { height: auto; min-height: 0; grid-template-rows: minmax(0, 1fr) 76px; }
   .avatar-heading { align-items: center; padding: 9px 11px; touch-action: none; }
+  .avatar-heading > div:first-child { display: none; }
   .avatar-heading h2 { margin-top: 3px; font-size: 17px; }
-  .avatar-heading-actions { align-items: center; flex-direction: row; gap: 5px; }
+  .avatar-heading-actions { width: 100%; align-items: center; justify-content: space-between; flex-direction: row; gap: 5px; }
+  .avatar-switcher button { min-width: 45px; padding: 0 7px; }
   .avatar-float-toggle { display: inline-flex; align-items: center; }
   .avatar-live { padding: 5px 8px; }
   .avatar-stage { margin: 7px 8px 0; }
@@ -177,7 +179,8 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 380px) {
-  .avatar-switcher button { min-width: 48px; padding: 0 8px; }
+  .avatar-switcher button { min-width: 44px; padding: 0 6px; }
+  .avatar-live { display: none; }
   .composer { grid-template-columns: 42px minmax(0, 1fr) 70px; padding: 10px 9px; }
   .mic-button { width: 42px; height: 46px; }
 }
