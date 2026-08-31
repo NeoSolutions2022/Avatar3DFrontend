@@ -1,6 +1,6 @@
 # NeoTalk Avatar 3D
 
-Repositorio independente da plataforma web dos avatares Asuna e LIA. Ele contem o frontend, a API de poses, o container Docker e os binarios Unity WebGL necessarios para executar os avatares. O projeto-fonte do Unity nao faz parte deste repositorio.
+Repositorio independente da plataforma web dos avatares Asuna, LIA e ELIA. Ele contem o frontend, a API de poses, o container Docker e os binarios Unity WebGL necessarios para executar os avatares. O projeto-fonte do Unity nao faz parte deste repositorio.
 
 ## Executar
 
@@ -43,7 +43,7 @@ A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O arquivo
 
 ## Chat MVP
 
-A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado no avatar selecionado. O usuario pode alternar entre Asuna e LIA; a escolha e preservada no navegador e o sinal ativo e recarregado durante a troca. A chave da integracao nunca e enviada ao navegador.
+A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado no avatar selecionado. O usuario pode alternar entre Asuna, LIA e ELIA; a escolha e preservada no navegador e o sinal ativo e recarregado durante a troca. A chave da integracao nunca e enviada ao navegador.
 
 Configure no `.env` ou no painel do container:
 

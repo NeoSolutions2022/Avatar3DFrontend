@@ -1,5 +1,6 @@
 const params = new URLSearchParams(window.location.search);
 const supportedAvatars = new Set(["asuna", "lia", "elia"]);
+const initialAvatar = String(params.get("avatar") || "").trim().toLowerCase();
 const defaults = { asuna: 1, lia: 1.28, elia: 1.28 };
 const minZoom = 0.76;
 const maxZoom = 1.48;
@@ -9,7 +10,7 @@ const maxPollAttempts = 140;
 const state = {
   allowedOrigins: [],
   trustedParentOrigin: null,
-  avatar: supportedAvatars.has(params.get("avatar")) ? params.get("avatar") : "lia",
+  avatar: supportedAvatars.has(initialAvatar) ? initialAvatar : "lia",
   background: validColor(params.get("background")) || "#ffffff",
   loop: params.get("loop") !== "0" && params.get("loop") !== "false",
   zoom: clampZoom(Number(params.get("zoom")) || 0),
@@ -119,7 +120,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20260831-elia2");
+  url.searchParams.set("build", manifest.builtAtUtc || "20260831-elia4");
   return url.href;
 }
 
@@ -214,7 +215,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.08.31-elia.2",
+      productVersion: "2026.08.31-elia.4",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -236,7 +237,11 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   elements.canvas.setAttribute("aria-label", `Avatar ${avatar.name} 3D`);
   elements.loader.classList.add("hidden");
   emitStatus("ready");
-  postToParent("neotalk:ready", { version: "2026.08.31-elia.2", capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"] });
+  postToParent("neotalk:ready", {
+    version: "2026.08.31-elia.4",
+    avatars: [...supportedAvatars],
+    capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"],
+  });
 
   if (resumePose) await loadPose(resumePose);
 }

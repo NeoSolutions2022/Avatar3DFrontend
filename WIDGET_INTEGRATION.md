@@ -43,7 +43,7 @@ HTML:
   <iframe
     id="neotalk-avatar"
     title="Tradutor em LIBRAS"
-    src="https://SEU-DOMINIO-AVATAR/widget?avatar=lia&loop=1&background=%23ffffff"
+    src="https://SEU-DOMINIO-AVATAR/widget?avatar=elia&loop=1&background=%23ffffff"
     allow="fullscreen"
   ></iframe>
 </div>
@@ -85,6 +85,7 @@ window.addEventListener("message", (event) => {
   if (message.type === "neotalk:ready") {
     avatarReady = true;
     console.log("Avatar pronto:", message.avatar);
+    console.log("Avatares disponiveis:", message.avatars);
   }
 
   if (message.type === "neotalk:status") {
@@ -129,7 +130,7 @@ Para uma frase inicial, monte a URL com `URLSearchParams`; nao concatene texto m
 ```js
 const url = new URL("https://SEU-DOMINIO-AVATAR/widget");
 url.search = new URLSearchParams({
-  avatar: "lia",
+  avatar: "elia",
   phrase: "bom dia",
   loop: "1",
   background: "#ffffff",
@@ -149,6 +150,7 @@ Todos os comandos sao enviados para `avatarFrame.contentWindow` com o dominio ex
 
 // Trocar o avatar e manter a pose atual.
 { type: "neotalk:set-avatar", avatar: "asuna" }
+{ type: "neotalk:set-avatar", avatar: "lia" }
 { type: "neotalk:set-avatar", avatar: "elia" }
 
 // Ajustes visuais.
@@ -173,7 +175,7 @@ Limites:
 
 | Evento | Campos principais | Quando ocorre |
 |---|---|---|
-| `neotalk:ready` | `avatar`, `version`, `capabilities` | WebGL pronto para receber comandos |
+| `neotalk:ready` | `avatar`, `avatars`, `version`, `capabilities` | WebGL pronto para receber comandos; `avatars` inclui `asuna`, `lia` e `elia` |
 | `neotalk:status` | `status`, `avatar` e contexto | Mudanca de estado |
 | `neotalk:playing` | `phrase`, `words`, `taskId`, `avatar` | Pose carregada e em reproducao |
 | `neotalk:error` | `code`, `message`, `avatar` | Falha de inicializacao, comando ou processamento |
@@ -190,7 +192,7 @@ loading_avatar -> ready -> queued -> processing -> loading_pose -> playing
 2. Configure `AVATAR3D_WIDGET_ORIGINS` com todos os dominios autorizados.
 3. Reimplante o container.
 4. Confirme que `GET /api/v1/health` retorna `webgl_ready: true` e `mvp_ready: true`.
-5. Abra `/widget?avatar=lia` diretamente e confirme o carregamento da LIA.
+5. Abra `/widget?avatar=elia` diretamente e confirme o carregamento da ELIA.
 6. Teste a incorporacao a partir de uma origem autorizada.
 7. Confirme os eventos `neotalk:ready`, `neotalk:status` e `neotalk:playing` no site externo.
 8. Confirme que nenhuma chave privada aparece no HTML, JavaScript ou painel Network do site externo.
