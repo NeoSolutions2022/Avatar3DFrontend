@@ -1,0 +1,12 @@
+{
+    "avatarName": "ELIA",
+    "runtimeObject": "ELIA Pose Skeleton Preview",
+    "scene": "Assets/Scenes/ELIARuntime.unity",
+    "loaderUrl": "Build/elia.loader.js",
+    "dataUrl": "Build/elia.data",
+    "frameworkUrl": "Build/elia.framework.js",
+    "codeUrl": "Build/elia.wasm",
+    "buildBytes": "133569353",
+    "unityVersion": "6000.2.2f1",
+    "builtAtUtc": "2026-08-31T19:35:34.3524674Z"
+}
