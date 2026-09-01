@@ -126,7 +126,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "api_version": "2.1.0",
-        "app_version": "2026.09.01-elia.5",
+        "app_version": "2026.09.01-elia.6",
         "pose_pipeline": "original-payload-pass-through",
         "webgl_ready": webgl_ready,
         "avatars": ready_avatars,
@@ -142,7 +142,7 @@ def widget_config() -> JSONResponse:
             "avatars": ["asuna", "lia", "elia"],
             "default_avatar": "lia",
             "max_phrase_length": 500,
-            "app_version": "2026.09.01-elia.5",
+            "app_version": "2026.09.01-elia.6",
         },
         headers={"Cache-Control": "no-store"},
     )
