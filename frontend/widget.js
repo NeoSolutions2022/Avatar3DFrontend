@@ -4,8 +4,10 @@ const initialAvatar = String(params.get("avatar") || "").trim().toLowerCase();
 const defaults = { asuna: 1, lia: 1.28, elia: 1.28 };
 const minZoom = 0.76;
 const maxZoom = 1.48;
-const pollIntervalMs = 2200;
-const maxPollAttempts = 140;
+const pollScheduleMs = [0, 300, 500, 800, 1200];
+// Mantem aproximadamente os mesmos cinco minutos de tolerancia do fluxo
+// anterior, mesmo estabilizando as consultas seguintes em 1,2 segundo.
+const maxPollAttempts = 250;
 
 const state = {
   allowedOrigins: [],
@@ -50,6 +52,10 @@ function validColor(value) {
 function clampZoom(value) {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.min(maxZoom, Math.max(minZoom, value));
+}
+
+function pollDelayForAttempt(attempt) {
+  return pollScheduleMs[Math.min(attempt, pollScheduleMs.length - 1)];
 }
 
 function normalizeOrigin(value) {
@@ -120,7 +126,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20260901-elia6");
+  url.searchParams.set("build", manifest.builtAtUtc || "20260901-elia7");
   return url.href;
 }
 
@@ -215,7 +221,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.09.01-elia.6",
+      productVersion: "2026.09.01-elia.7",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -238,7 +244,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   elements.loader.classList.add("hidden");
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.09.01-elia.6",
+    version: "2026.09.01-elia.7",
     avatars: [...supportedAvatars],
     capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"],
   });
@@ -303,7 +309,8 @@ async function requestSign(rawPhrase) {
 
   let transientFailures = 0;
   for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-    await wait(pollIntervalMs);
+    const delayMs = pollDelayForAttempt(attempt);
+    if (delayMs > 0) await wait(delayMs);
     if (sequence !== state.requestSequence) return;
     try {
       const result = await api(`/api/v1/mvp/tasks/${encodeURIComponent(payload.task_id)}`);

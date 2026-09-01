@@ -7,6 +7,7 @@ Este guia e para o time que vai exibir somente a caixa da LIA, ELIA ou Asuna em 
 - O site externo incorpora `https://SEU-DOMINIO-AVATAR/widget` em um `iframe`.
 - O site externo envia a frase ao iframe com `window.postMessage`.
 - O widget chama o backend NeoTalk, acompanha a tarefa, recebe o `.pose` original sem transformacoes intermediarias e o reproduz no avatar.
+- Ao receber o `task_id`, o widget consulta o status imediatamente. Enquanto a tarefa processa, usa os intervalos progressivos `0 ms`, `300 ms`, `500 ms`, `800 ms` e `1.200 ms`; depois permanece em `1.200 ms`.
 - A chave `NEOTALK_API_KEY` permanece exclusivamente no servidor do Avatar3DPlatform.
 - O site externo nao deve chamar a API NeoTalk diretamente e nao precisa conhecer nenhuma chave privada.
 
