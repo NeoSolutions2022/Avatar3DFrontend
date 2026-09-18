@@ -115,6 +115,17 @@ function sinalizar(frase) {
 
 Registre o listener de `message` antes de permitir que o usuario envie uma frase. Envie comandos somente depois de receber `neotalk:ready`.
 
+Depois da primeira execução, o widget mantém as últimas 24 poses na memória da aba. Para repetir uma frase sem criar outra tarefa na API de poses, envie:
+
+```js
+avatarFrame.contentWindow.postMessage(
+  { type: "neotalk:replay", phrase: fraseEmGlosas },
+  "https://SEU-DOMINIO-AVATAR",
+);
+```
+
+O cache é deliberadamente temporário: ele desaparece ao recarregar o widget e nunca mistura sessões de usuários diferentes.
+
 ## 3. Parametros da URL
 
 | Parametro | Valores | Padrao | Finalidade |

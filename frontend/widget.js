@@ -8,6 +8,7 @@ const pollScheduleMs = [0, 300, 500, 800, 1200];
 // Mantem aproximadamente os mesmos cinco minutos de tolerancia do fluxo
 // anterior, mesmo estabilizando as consultas seguintes em 1,2 segundo.
 const maxPollAttempts = 250;
+const maxCachedPoses = 24;
 
 const state = {
   allowedOrigins: [],
@@ -23,6 +24,7 @@ const state = {
   requestSequence: 0,
   activePose: null,
   pendingPoseLoad: null,
+  poseCache: new Map(),
 };
 if (!state.zoom) state.zoom = defaults[state.avatar];
 
@@ -132,6 +134,20 @@ function runtimeAssetUrl(value, runtimeBase, manifest) {
 
 function refreshZoomLabel() {
   elements.zoomReset.textContent = `${Math.round(state.zoom * 100)}%`;
+}
+
+function phraseKey(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+function cachePose(phrase, pose, words) {
+  const key = phraseKey(phrase);
+  if (!key || !pose?.content_url) return;
+  state.poseCache.delete(key);
+  state.poseCache.set(key, { pose, words: Array.isArray(words) ? words : [] });
+  while (state.poseCache.size > maxCachedPoses) {
+    state.poseCache.delete(state.poseCache.keys().next().value);
+  }
 }
 
 function setZoom(value) {
@@ -246,7 +262,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   postToParent("neotalk:ready", {
     version: "2026.09.18-elia.13",
     avatars: [...supportedAvatars],
-    capabilities: ["sign", "avatar", "zoom", "loop", "background", "playback"],
+    capabilities: ["sign", "replay", "avatar", "zoom", "loop", "background", "playback"],
   });
 
   if (resumePose) await loadPose(resumePose);
@@ -323,6 +339,7 @@ async function requestSign(rawPhrase) {
       const words = Array.isArray(result.payload.palavras_encontradas)
         ? result.payload.palavras_encontradas.map((word) => String(word).replace(/\.pose$/i, ""))
         : [];
+      cachePose(phrase, result.payload.pose, words);
       emitStatus("playing", { phrase, words, taskId: payload.task_id });
       postToParent("neotalk:playing", { phrase, words, taskId: payload.task_id });
       return;
@@ -337,10 +354,27 @@ async function requestSign(rawPhrase) {
   throw new Error("A tradução demorou mais que o esperado.");
 }
 
+async function replayCachedPhrase(rawPhrase) {
+  const phrase = String(rawPhrase || "").replace(/\s+/g, " ").trim();
+  const cached = state.poseCache.get(phraseKey(phrase));
+  if (!cached) {
+    const error = new Error("A pose não está mais disponível no cache desta sessão.");
+    error.code = "pose_cache_miss";
+    throw error;
+  }
+  emitStatus("loading_pose", { phrase, cached: true });
+  await loadPose(cached.pose);
+  emitStatus("playing", { phrase, words: cached.words, cached: true });
+  postToParent("neotalk:playing", { phrase, words: cached.words, cached: true });
+}
+
 async function runCommand(message) {
   switch (message.type) {
     case "neotalk:sign":
       await requestSign(message.phrase);
+      break;
+    case "neotalk:replay":
+      await replayCachedPhrase(message.phrase);
       break;
     case "neotalk:set-avatar":
       await initializeAvatar(String(message.avatar || "").toLowerCase());
@@ -368,7 +402,7 @@ window.addEventListener("message", (event) => {
   if (!message || typeof message !== "object" || !String(message.type || "").startsWith("neotalk:")) return;
   state.trustedParentOrigin = event.origin;
   runCommand(message).catch((error) => {
-    if (error.name !== "AbortError") showError(error.message, "command_failed");
+    if (error.name !== "AbortError") showError(error.message, error.code || "command_failed");
   });
 });
 
