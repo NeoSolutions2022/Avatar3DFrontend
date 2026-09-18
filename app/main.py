@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -31,6 +32,21 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
+
+
+@app.middleware("http")
+async def webgl_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/webgl/"):
+        if "/Build/" in path:
+            # Os nomes ganham ?build=<builtAtUtc> no widget. Uma nova build usa
+            # outra URL, então o binário atual pode ficar no cache por um ano.
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.endswith("/manifest.json") or path.endswith("/catalog.json"):
+            response.headers["Cache-Control"] = "no-cache"
+    return response
 
 storage = PoseStorage(settings)
 neotalk_client = NeoTalkClient(settings)

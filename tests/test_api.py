@@ -151,6 +151,22 @@ class PoseApiTests(unittest.TestCase):
         self.assertIn('case "neotalk:replay"', widget_script.text)
         self.assertIn('capabilities: ["sign", "replay"', widget_script.text)
 
+    def test_webgl_builds_are_compressed_and_cached_by_version(self) -> None:
+        build = self.client.get(
+            "/webgl/elia/Build/elia.framework.js?build=test",
+            headers={"Accept-Encoding": "gzip"},
+        )
+        self.assertEqual(build.status_code, 200)
+        self.assertEqual(build.headers["content-encoding"], "gzip")
+        self.assertEqual(
+            build.headers["cache-control"],
+            "public, max-age=31536000, immutable",
+        )
+
+        manifest = self.client.get("/webgl/elia/manifest.json")
+        self.assertEqual(manifest.status_code, 200)
+        self.assertEqual(manifest.headers["cache-control"], "no-cache")
+
     def test_widget_open_mode_omits_frame_ancestors_for_sandboxed_previews(self) -> None:
         open_settings = replace(app_settings, widget_origins=("*",))
         with patch("app.main.settings", open_settings):
