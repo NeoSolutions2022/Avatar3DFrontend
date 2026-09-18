@@ -115,6 +115,11 @@ class PoseApiTests(unittest.TestCase):
         self.assertEqual(config.json()["max_phrase_length"], 500)
         self.assertEqual(config.headers["cache-control"], "no-store")
 
+        widget_script = self.client.get("/static/widget.js")
+        self.assertEqual(widget_script.status_code, 200)
+        self.assertIn('case "neotalk:replay"', widget_script.text)
+        self.assertIn('capabilities: ["sign", "replay"', widget_script.text)
+
     def test_widget_open_mode_omits_frame_ancestors_for_sandboxed_previews(self) -> None:
         open_settings = replace(app_settings, widget_origins=("*",))
         with patch("app.main.settings", open_settings):
