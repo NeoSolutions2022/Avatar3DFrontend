@@ -1,16 +1,19 @@
 const params = new URLSearchParams(window.location.search);
-const supportedAvatars = new Set(["asuna", "lia"]);
-const defaults = { asuna: 1, lia: 1.28 };
+const supportedAvatars = new Set(["asuna", "lia", "elia"]);
+const initialAvatar = String(params.get("avatar") || "").trim().toLowerCase();
+const defaults = { asuna: 1, lia: 1.28, elia: 1.28 };
 const minZoom = 0.76;
 const maxZoom = 1.48;
-const pollIntervalMs = 2200;
-const maxPollAttempts = 140;
+const pollScheduleMs = [0, 300, 500, 800, 1200];
+// Mantem aproximadamente os mesmos cinco minutos de tolerancia do fluxo
+// anterior, mesmo estabilizando as consultas seguintes em 1,2 segundo.
+const maxPollAttempts = 250;
 const maxCachedPoses = 24;
 
 const state = {
   allowedOrigins: [],
   trustedParentOrigin: null,
-  avatar: supportedAvatars.has(params.get("avatar")) ? params.get("avatar") : "lia",
+  avatar: supportedAvatars.has(initialAvatar) ? initialAvatar : "lia",
   background: validColor(params.get("background")) || "#ffffff",
   loop: params.get("loop") !== "0" && params.get("loop") !== "false",
   zoom: clampZoom(Number(params.get("zoom")) || 0),
@@ -34,6 +37,7 @@ const elements = {
   progress: document.querySelector("#unity-progress"),
   controls: document.querySelector("#widget-controls"),
   error: document.querySelector("#widget-error"),
+  appVersion: document.querySelector("#app-version"),
   zoomOut: document.querySelector("#zoom-out"),
   zoomReset: document.querySelector("#zoom-reset"),
   zoomIn: document.querySelector("#zoom-in"),
@@ -50,6 +54,10 @@ function validColor(value) {
 function clampZoom(value) {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.min(maxZoom, Math.max(minZoom, value));
+}
+
+function pollDelayForAttempt(attempt) {
+  return pollScheduleMs[Math.min(attempt, pollScheduleMs.length - 1)];
 }
 
 function normalizeOrigin(value) {
@@ -116,6 +124,12 @@ function sendUnity(method, value) {
   if (value === undefined) state.unity.SendMessage(state.runtimeObject, method);
   else state.unity.SendMessage(state.runtimeObject, method, String(value));
   return true;
+}
+
+function runtimeAssetUrl(value, runtimeBase, manifest) {
+  const url = new URL(value, runtimeBase);
+  url.searchParams.set("build", manifest.builtAtUtc || "20260918-elia13");
+  return url.href;
 }
 
 function refreshZoomLabel() {
@@ -187,7 +201,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   if (!params.has("zoom")) state.zoom = defaults[avatarId];
   clearError();
   elements.loader.classList.remove("hidden");
-  elements.loaderTitle.textContent = `Preparando ${avatarId === "lia" ? "LIA" : "Asuna"}`;
+  elements.loaderTitle.textContent = `Preparando ${avatarId === "asuna" ? "Asuna" : avatarId.toUpperCase()}`;
   elements.loaderMessage.textContent = "Carregando o renderizador 3D...";
   elements.progress.style.width = "0%";
   emitStatus("loading_avatar");
@@ -205,7 +219,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   const runtimeBase = new URL("./", manifestUrl);
 
   const script = document.createElement("script");
-  script.src = new URL(manifest.loaderUrl, runtimeBase).href;
+  script.src = runtimeAssetUrl(manifest.loaderUrl, runtimeBase, manifest);
   script.async = true;
   state.loaderScript = script;
   document.body.appendChild(script);
@@ -217,15 +231,15 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   const instance = await createUnityInstance(
     elements.canvas,
     {
-      dataUrl: new URL(manifest.dataUrl, runtimeBase).href,
-      frameworkUrl: new URL(manifest.frameworkUrl, runtimeBase).href,
-      codeUrl: new URL(manifest.codeUrl, runtimeBase).href,
+      dataUrl: runtimeAssetUrl(manifest.dataUrl, runtimeBase, manifest),
+      frameworkUrl: runtimeAssetUrl(manifest.frameworkUrl, runtimeBase, manifest),
+      codeUrl: runtimeAssetUrl(manifest.codeUrl, runtimeBase, manifest),
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2.0.0",
+      productVersion: "2026.09.18-elia.13",
       matchWebGLToCanvasSize: true,
-      devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "lia" ? 2.25 : 2),
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
     (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },
   );
@@ -236,6 +250,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
 
   state.unity = instance;
+  elements.appVersion.title = `${avatar.name} WebGL ${manifest.builtAtUtc || "sem data"}`;
   sendUnity("SetBackgroundColor", state.background);
   sendUnity("SetCameraZoom", state.zoom.toFixed(2));
   sendUnity("SetLoop", state.loop ? "true" : "false");
@@ -244,7 +259,11 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   elements.canvas.setAttribute("aria-label", `Avatar ${avatar.name} 3D`);
   elements.loader.classList.add("hidden");
   emitStatus("ready");
-  postToParent("neotalk:ready", { version: "1.1", capabilities: ["sign", "replay", "avatar", "zoom", "loop", "background", "playback"] });
+  postToParent("neotalk:ready", {
+    version: "2026.09.18-elia.13",
+    avatars: [...supportedAvatars],
+    capabilities: ["sign", "replay", "avatar", "zoom", "loop", "background", "playback"],
+  });
 
   if (resumePose) await loadPose(resumePose);
 }
@@ -306,7 +325,8 @@ async function requestSign(rawPhrase) {
 
   let transientFailures = 0;
   for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-    await wait(pollIntervalMs);
+    const delayMs = pollDelayForAttempt(attempt);
+    if (delayMs > 0) await wait(delayMs);
     if (sequence !== state.requestSequence) return;
     try {
       const result = await api(`/api/v1/mvp/tasks/${encodeURIComponent(payload.task_id)}`);

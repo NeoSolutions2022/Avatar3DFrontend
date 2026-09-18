@@ -1,12 +1,13 @@
 # Integracao do widget de avatar NeoTalk
 
-Este guia e para o time que vai exibir somente a caixa da LIA ou da Asuna em um site externo e enviar frases para ela sinalizar.
+Este guia e para o time que vai exibir somente a caixa da LIA, ELIA ou Asuna em um site externo e enviar frases para ela sinalizar.
 
 ## Contrato da integracao
 
 - O site externo incorpora `https://SEU-DOMINIO-AVATAR/widget` em um `iframe`.
 - O site externo envia a frase ao iframe com `window.postMessage`.
-- O widget chama o backend NeoTalk, acompanha a tarefa, recebe o `.pose` normalizado e o reproduz no avatar.
+- O widget chama o backend NeoTalk, acompanha a tarefa, recebe o `.pose` original sem transformacoes intermediarias e o reproduz no avatar.
+- Ao receber o `task_id`, o widget consulta o status imediatamente. Enquanto a tarefa processa, usa os intervalos progressivos `0 ms`, `300 ms`, `500 ms`, `800 ms` e `1.200 ms`; depois permanece em `1.200 ms`.
 - A chave `NEOTALK_API_KEY` permanece exclusivamente no servidor do Avatar3DPlatform.
 - O site externo nao deve chamar a API NeoTalk diretamente e nao precisa conhecer nenhuma chave privada.
 
@@ -43,7 +44,7 @@ HTML:
   <iframe
     id="neotalk-avatar"
     title="Tradutor em LIBRAS"
-    src="https://SEU-DOMINIO-AVATAR/widget?avatar=lia&loop=1&background=%23ffffff"
+    src="https://SEU-DOMINIO-AVATAR/widget?avatar=elia&loop=1&background=%23ffffff"
     allow="fullscreen"
   ></iframe>
 </div>
@@ -85,6 +86,7 @@ window.addEventListener("message", (event) => {
   if (message.type === "neotalk:ready") {
     avatarReady = true;
     console.log("Avatar pronto:", message.avatar);
+    console.log("Avatares disponiveis:", message.avatars);
   }
 
   if (message.type === "neotalk:status") {
@@ -128,7 +130,7 @@ O cache é deliberadamente temporário: ele desaparece ao recarregar o widget e 
 
 | Parametro | Valores | Padrao | Finalidade |
 |---|---|---|---|
-| `avatar` | `lia` ou `asuna` | `lia` | Avatar inicial |
+| `avatar` | `lia`, `elia` ou `asuna` | `lia` | Avatar inicial |
 | `phrase` | texto, codificado na URL | vazio | Frase executada uma vez apos o carregamento |
 | `loop` | `1`/`true` ou `0`/`false` | `1` | Repeticao automatica do sinal |
 | `zoom` | `0.76` a `1.48` | por avatar | Enquadramento inicial |
@@ -140,7 +142,7 @@ Para uma frase inicial, monte a URL com `URLSearchParams`; nao concatene texto m
 ```js
 const url = new URL("https://SEU-DOMINIO-AVATAR/widget");
 url.search = new URLSearchParams({
-  avatar: "lia",
+  avatar: "elia",
   phrase: "bom dia",
   loop: "1",
   background: "#ffffff",
@@ -160,6 +162,8 @@ Todos os comandos sao enviados para `avatarFrame.contentWindow` com o dominio ex
 
 // Trocar o avatar e manter a pose atual.
 { type: "neotalk:set-avatar", avatar: "asuna" }
+{ type: "neotalk:set-avatar", avatar: "lia" }
+{ type: "neotalk:set-avatar", avatar: "elia" }
 
 // Ajustes visuais.
 { type: "neotalk:set-zoom", zoom: 1.2 }
@@ -177,13 +181,13 @@ Limites:
 - `phrase`: de 1 a 500 caracteres.
 - `zoom`: de `0.76` a `1.48`.
 - `background`: formato hexadecimal completo `#RRGGBB`.
-- `avatar`: somente `lia` ou `asuna`.
+- `avatar`: somente `lia`, `elia` ou `asuna`.
 
 ## 5. Eventos emitidos pelo widget
 
 | Evento | Campos principais | Quando ocorre |
 |---|---|---|
-| `neotalk:ready` | `avatar`, `version`, `capabilities` | WebGL pronto para receber comandos |
+| `neotalk:ready` | `avatar`, `avatars`, `version`, `capabilities` | WebGL pronto para receber comandos; `avatars` inclui `asuna`, `lia` e `elia` |
 | `neotalk:status` | `status`, `avatar` e contexto | Mudanca de estado |
 | `neotalk:playing` | `phrase`, `words`, `taskId`, `avatar` | Pose carregada e em reproducao |
 | `neotalk:error` | `code`, `message`, `avatar` | Falha de inicializacao, comando ou processamento |
@@ -200,7 +204,7 @@ loading_avatar -> ready -> queued -> processing -> loading_pose -> playing
 2. Configure `AVATAR3D_WIDGET_ORIGINS` com todos os dominios autorizados.
 3. Reimplante o container.
 4. Confirme que `GET /api/v1/health` retorna `webgl_ready: true` e `mvp_ready: true`.
-5. Abra `/widget?avatar=lia` diretamente e confirme o carregamento da LIA.
+5. Abra `/widget?avatar=elia` diretamente e confirme o carregamento da ELIA.
 6. Teste a incorporacao a partir de uma origem autorizada.
 7. Confirme os eventos `neotalk:ready`, `neotalk:status` e `neotalk:playing` no site externo.
 8. Confirme que nenhuma chave privada aparece no HTML, JavaScript ou painel Network do site externo.

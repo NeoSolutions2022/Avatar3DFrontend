@@ -7,9 +7,11 @@ const fallbackCatalog = {
   avatars: [
     { id: "asuna", name: "Asuna", manifestUrl: "asuna/manifest.json" },
     { id: "lia", name: "LIA", manifestUrl: "lia/manifest.json" },
+    { id: "elia", name: "ELIA", manifestUrl: "elia/manifest.json" },
   ],
 };
-const avatarZoomLevels = { asuna: 1, lia: 1.28 };
+const avatarZoomLevels = { asuna: 1, lia: 1.28, elia: 1.28 };
+const supportedAvatars = new Set(["asuna", "lia", "elia"]);
 
 let unityInstance = null;
 let pendingPose = null;
@@ -20,10 +22,10 @@ let toastTimer = null;
 let poseLoadContext = null;
 let poseLoadTimer = null;
 let avatarCatalog = null;
-let selectedAvatar = ["asuna", "lia"].includes(localStorage.getItem("neotalk-avatar"))
+let selectedAvatar = supportedAvatars.has(localStorage.getItem("neotalk-avatar"))
   ? localStorage.getItem("neotalk-avatar")
   : "asuna";
-let selectedAvatarName = selectedAvatar === "lia" ? "LIA" : "Asuna";
+let selectedAvatarName = selectedAvatar === "asuna" ? "Asuna" : selectedAvatar.toUpperCase();
 let zoomLevel = avatarZoomLevels[selectedAvatar] || 1;
 let avatarLoadSequence = 0;
 let unityLoaderScript = null;
@@ -42,6 +44,7 @@ const elements = {
   avatarOptions: [...document.querySelectorAll("[data-avatar]")],
   avatarPanel: document.querySelector(".avatar-panel"),
   avatarLive: document.querySelector("#avatar-live"),
+  appVersion: document.querySelector("#app-version"),
   avatarWords: document.querySelector("#avatar-words"),
   canvas: document.querySelector("#unity-canvas"),
   chatScroll: document.querySelector("#chat-scroll"),
@@ -108,6 +111,12 @@ function sendUnity(method, value) {
   return true;
 }
 
+function runtimeAssetUrl(value, runtimeBase, manifest) {
+  const url = new URL(value, runtimeBase);
+  url.searchParams.set("build", manifest.builtAtUtc || "20260918-elia13");
+  return url.href;
+}
+
 function setAvatarOptionState(isLoading = false) {
   for (const option of elements.avatarOptions) {
     const isActive = option.dataset.avatar === selectedAvatar;
@@ -153,7 +162,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
   poseLoadContext = null;
   pendingPose = null;
   selectedAvatar = avatarId;
-  selectedAvatarName = avatarId === "lia" ? "LIA" : "Asuna";
+  selectedAvatarName = avatarId === "asuna" ? "Asuna" : avatarId.toUpperCase();
   zoomLevel = avatarZoomLevels[avatarId] || 1;
   elements.zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
   localStorage.setItem("neotalk-avatar", avatarId);
@@ -187,7 +196,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
     runtimeObject = manifest.runtimeObject || runtimeObject;
     const runtimeBase = new URL("./", manifestUrl);
     const script = document.createElement("script");
-    script.src = new URL(manifest.loaderUrl, runtimeBase).href;
+    script.src = runtimeAssetUrl(manifest.loaderUrl, runtimeBase, manifest);
     script.async = true;
     unityLoaderScript = script;
     document.body.appendChild(script);
@@ -199,20 +208,20 @@ async function initializeAvatar(avatarId = selectedAvatar) {
     const nextInstance = await createUnityInstance(
       elements.canvas,
       {
-        dataUrl: new URL(manifest.dataUrl, runtimeBase).href,
-        frameworkUrl: new URL(manifest.frameworkUrl, runtimeBase).href,
-        codeUrl: new URL(manifest.codeUrl, runtimeBase).href,
+        dataUrl: runtimeAssetUrl(manifest.dataUrl, runtimeBase, manifest),
+        frameworkUrl: runtimeAssetUrl(manifest.frameworkUrl, runtimeBase, manifest),
+        codeUrl: runtimeAssetUrl(manifest.codeUrl, runtimeBase, manifest),
         streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
         companyName: "NeoTalk",
         productName: `NeoTalk ${selectedAvatarName}`,
-        productVersion: "2.0.0",
+        productVersion: "2026.09.18-elia.13",
         matchWebGLToCanvasSize: true,
         // LIA has finer facial and hand geometry. A slightly higher cap keeps
         // fingers and blend-shape contours crisp on high-density mobile screens
         // without paying the cost of an unrestricted 3x/4x WebGL framebuffer.
         devicePixelRatio: Math.min(
           window.devicePixelRatio || 1,
-          selectedAvatar === "lia" ? 2.25 : 2,
+          selectedAvatar === "asuna" ? 2 : 2.25,
         ),
       },
       (value) => { elements.progress.style.width = `${Math.round(value * 100)}%`; },
@@ -223,6 +232,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
       return;
     }
     unityInstance = nextInstance;
+    elements.appVersion.title = `${selectedAvatarName} WebGL ${manifest.builtAtUtc || "sem data"}`;
     sendUnity("SetBackgroundColor", "#ffffff");
     sendUnity("SetCameraZoom", zoomLevel.toFixed(2));
     sendUnity("PausePlayback");

@@ -38,6 +38,8 @@ button { cursor: pointer; }
 .mvp-brand { display: inline-flex; align-items: center; gap: 16px; color: var(--navy); text-decoration: none; }
 .mvp-brand img { display: block; width: 154px; height: auto; }
 .mvp-brand span { padding-left: 16px; border-left: 1px solid var(--line); color: #70809a; font-size: 11px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+.header-meta { display: flex; align-items: center; gap: 10px; }
+.app-version { color: #52708e; font-size: 10px; font-weight: 800; letter-spacing: .035em; }
 .header-status { display: inline-flex; align-items: center; gap: 9px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #f9fbfd; font-size: 12px; font-weight: 650; }
 .header-status i { width: 8px; height: 8px; border-radius: 50%; background: #e0a43b; box-shadow: 0 0 0 4px rgba(224, 164, 59, .13); }
 .header-status.ready i { background: var(--success); box-shadow: 0 0 0 4px rgba(12, 167, 160, .12); }
@@ -146,13 +148,16 @@ button { cursor: pointer; }
   .mvp-header { padding: 0 14px; }
   .mvp-brand img { width: 132px; }
   .mvp-brand span, .header-status { display: none; }
+  .app-version { font-size: 9px; }
   .mvp-layout { grid-template-rows: minmax(260px, 42dvh) minmax(0, 1fr); gap: 9px; padding: 8px; }
   .chat-panel, .avatar-panel { border-radius: 15px; }
   .avatar-panel { height: auto; min-height: 0; grid-template-rows: 64px minmax(0, 1fr) 62px; }
   .chat-panel { height: auto; min-height: 0; grid-template-rows: minmax(0, 1fr) 76px; }
   .avatar-heading { align-items: center; padding: 9px 11px; touch-action: none; }
+  .avatar-heading > div:first-child { display: none; }
   .avatar-heading h2 { margin-top: 3px; font-size: 17px; }
-  .avatar-heading-actions { align-items: center; flex-direction: row; gap: 5px; }
+  .avatar-heading-actions { width: 100%; align-items: center; justify-content: space-between; flex-direction: row; gap: 5px; }
+  .avatar-switcher button { min-width: 45px; padding: 0 7px; }
   .avatar-float-toggle { display: inline-flex; align-items: center; }
   .avatar-live { padding: 5px 8px; }
   .avatar-stage { margin: 7px 8px 0; }
@@ -174,7 +179,8 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 380px) {
-  .avatar-switcher button { min-width: 48px; padding: 0 8px; }
+  .avatar-switcher button { min-width: 44px; padding: 0 6px; }
+  .avatar-live { display: none; }
   .composer { grid-template-columns: 42px minmax(0, 1fr) 70px; padding: 10px 9px; }
   .mic-button { width: 42px; height: 46px; }
 }

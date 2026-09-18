@@ -140,7 +140,7 @@ async function refreshPoses() {
         <span class="pose-index">${String(index + 1).padStart(2, "0")}</span>
         <span class="pose-copy">
           <strong title="${escapeHtml(pose.name)}">${escapeHtml(pose.name)}</strong>
-          <small>${pose.frame_count} frames · ${pose.source_dimensions}D → 3D</small>
+          <small>${pose.frame_count} frames · ${pose.source_dimensions}D original</small>
         </span>
         <span class="pose-action">›</span>
       </button>
@@ -204,7 +204,7 @@ elements.uploadForm.addEventListener("submit", async (event) => {
   } catch (error) { handleError(error); }
   finally {
     elements.uploadButton.disabled = false;
-    elements.uploadButton.firstChild.textContent = "Normalizar e reproduzir ";
+    elements.uploadButton.firstChild.textContent = "Validar e reproduzir ";
   }
 });
 

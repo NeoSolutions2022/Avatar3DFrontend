@@ -1,0 +1,39 @@
+LIA POSE PHRASE QUALITY REPORT
+glosses=LIBRAS COMUNICAÇÃO MELHORAR MUITO
+source_files=LIBRAS.pose, COMUNICAÇÃO.pose, MELHORAR.pose, MUITO.pose
+source_frames=LIBRAS:44, COMUNICAÇÃO:51, MELHORAR:55, MUITO:64
+transition_frames=8
+sha256=4c0509f96fb1d28a6141092f5f3bac205c70211647327d2a6bb5570e19a5ba28
+
+[raw_concatenated]
+frames=214
+hand_direction_p95_deg=24.363
+hand_direction_max_deg=162.939
+hand_direction_over_65=32
+palm_normal_p95_deg=22.200
+palm_normal_max_deg=61.554
+arm_direction_p95_deg=7.575
+arm_direction_max_deg=52.447
+low_confidence_hand_points=0
+
+[filtered_and_transitioned]
+frames=238
+hand_direction_p95_deg=10.759
+hand_direction_max_deg=56.908
+hand_direction_over_65=0
+palm_normal_p95_deg=10.149
+palm_normal_max_deg=22.126
+arm_direction_p95_deg=6.290
+arm_direction_max_deg=11.457
+low_confidence_hand_points=0
+
+[normalized_anatomical_3d]
+frames=238
+hand_direction_p95_deg=9.675
+hand_direction_max_deg=54.052
+hand_direction_over_65=0
+palm_normal_p95_deg=8.701
+palm_normal_max_deg=24.194
+arm_direction_p95_deg=6.290
+arm_direction_max_deg=11.457
+low_confidence_hand_points=0

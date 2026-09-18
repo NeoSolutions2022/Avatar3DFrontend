@@ -1,6 +1,6 @@
 # NeoTalk Avatar 3D
 
-Repositorio independente da plataforma web dos avatares Asuna e LIA. Ele contem o frontend, a API de poses, o container Docker e os binarios Unity WebGL necessarios para executar os avatares. O projeto-fonte do Unity nao faz parte deste repositorio.
+Repositorio independente da plataforma web dos avatares Asuna, LIA e ELIA. Ele contem o frontend, a API de poses, o container Docker e os binarios Unity WebGL necessarios para executar os avatares. O projeto-fonte do Unity nao faz parte deste repositorio.
 
 ## Executar
 
@@ -13,7 +13,7 @@ Abra:
 
 - Player: `http://localhost:8080`
 - MVP do chat: `http://localhost:8080/mvp`
-- Widget incorporavel: `http://localhost:8080/widget?avatar=lia`
+- Widget incorporavel: `http://localhost:8080/widget?avatar=lia` (aceita tambem `asuna` e `elia`)
 - OpenAPI: `http://localhost:8080/docs`
 - Healthcheck: `http://localhost:8080/api/v1/health`
 
@@ -39,11 +39,11 @@ const pose = await response.json();
 avatarIframe.src = pose.player_url;
 ```
 
-A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O movimento e validado, normalizado e persistido antes de ser entregue ao player.
+A API aceita `.pose` 2D (`X Y Confidence`) ou 3D (`X Y Z Confidence`). O arquivo e validado e entregue ao player exatamente como foi recebido, sem normalizacao de eixos, escala, proporcoes ou profundidade.
 
 ## Chat MVP
 
-A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado no avatar selecionado. O usuario pode alternar entre Asuna e LIA; a escolha e preservada no navegador e o sinal ativo e recarregado durante a troca. A chave da integracao nunca e enviada ao navegador.
+A rota `/mvp` envia a frase ao servico NeoTalk pelo backend, acompanha a tarefa Celery e reproduz o `.pose` retornado no avatar selecionado. O usuario pode alternar entre Asuna, LIA e ELIA; a escolha e preservada no navegador e o sinal ativo e recarregado durante a troca. A chave da integracao nunca e enviada ao navegador.
 
 Configure no `.env` ou no painel do container:
 
@@ -65,10 +65,10 @@ Configure `AVATAR3D_WIDGET_ORIGINS` com as origens exatas autorizadas e siga o g
 ## Estrutura
 
 ```text
-app/                 FastAPI, normalizacao e SQLite
+app/                 FastAPI, validacao pass-through e SQLite
 frontend/            interface web e integracao JavaScript
 tests/               testes de formato e API
-webgl/               catalogo e builds Unity WebGL de Asuna e LIA
+webgl/               catalogo e builds Unity WebGL de Asuna, LIA e ELIA
 Dockerfile           imagem unica para API, frontend e WebGL
 compose.yaml         servico e volume persistente
 ```
@@ -84,7 +84,6 @@ compose.yaml         servico e volume persistente
 | `AVATAR3D_MAX_POSE_BYTES` | `20971520` | Limite do upload |
 | `AVATAR3D_MAX_POSE_FRAMES` | `10000` | Limite de frames |
 | `AVATAR3D_KEEP_ORIGINALS` | `true` | Preserva o arquivo recebido |
-| `AVATAR3D_NORMALIZATION_MARGIN` | `1.02` | Margem dos comprimentos dos ossos |
 
 Veja todas as configuracoes em `.env.example`.
 
@@ -98,6 +97,6 @@ python -m venv .venv
 
 Os arquivos `webgl/*/Build/*.data` e `*.wasm` usam Git LFS. Instale o Git LFS antes de clonar ou publicar este repositorio.
 
-Para atualizar os avatares, execute `BuildAvatarWebGL.BuildAllFromCommandLine` no projeto Unity original e substitua o conteudo de `webgl/`. O arquivo `webgl/catalog.json` lista os avatares e cada subpasta (`webgl/asuna` e `webgl/lia`) possui seu proprio `manifest.json` e runtime.
+Para atualizar os avatares, execute `BuildAvatarWebGL.BuildAllFromCommandLine` no projeto Unity original e substitua o conteudo de `webgl/`. O arquivo `webgl/catalog.json` lista os avatares e cada subpasta (`webgl/asuna`, `webgl/lia` e `webgl/elia`) possui seu proprio `manifest.json` e runtime. Para compilar somente a nova variante, use `BuildAvatarWebGL.BuildEliaFromCommandLine`.
 
 Antes de publicar o repositorio, confirme que a licenca do modelo Asuna permite redistribuir os binarios WebGL gerados.
