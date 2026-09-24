@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
+import time
+from uuid import uuid4
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -33,6 +36,29 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
+
+
+@app.middleware("http")
+async def pose_pipeline_trace(request: Request, call_next):
+    started = time.perf_counter()
+    trace_id = uuid4().hex[:12]
+    request.state.pose_trace_id = trace_id
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/api/v1/mvp/sign" or path.startswith("/api/v1/mvp/tasks/"):
+        elapsed_ms = round((time.perf_counter() - started) * 1000)
+        response.headers["X-NeoTalk-Trace-ID"] = trace_id
+        logger = logging.getLogger("uvicorn.error")
+        logger.log(
+            logging.WARNING if response.status_code >= 500 else logging.INFO,
+            "pose_pipeline trace_id=%s stage=%s status=%s upstream_status=%s elapsed_ms=%s",
+            trace_id,
+            response.headers.get("X-NeoTalk-Failure-Stage") or ("submit" if path.endswith("/sign") else "task_status"),
+            response.status_code,
+            response.headers.get("X-NeoTalk-Upstream-Status", "-"),
+            elapsed_ms,
+        )
+    return response
 
 
 @app.middleware("http")
@@ -110,7 +136,10 @@ def persist_pose(*, name: str, fps: float, raw: bytes) -> PoseRecord:
 
 
 def mvp_error(exception: NeoTalkApiError) -> HTTPException:
-    return HTTPException(status_code=exception.status_code, detail=exception.detail)
+    headers = {"X-NeoTalk-Failure-Stage": exception.stage}
+    if exception.upstream_status is not None:
+        headers["X-NeoTalk-Upstream-Status"] = str(exception.upstream_status)
+    return HTTPException(status_code=exception.status_code, detail=exception.detail, headers=headers)
 
 
 @app.get("/api/v1/health", name="health")
@@ -176,7 +205,7 @@ def mvp_sign(payload: MvpSignRequest) -> JSONResponse:
 
     task_id = upstream.payload.get("task_id")
     if not isinstance(task_id, str) or not task_id:
-        raise HTTPException(status_code=502, detail="pose API did not return a task id")
+        raise HTTPException(status_code=502, detail="pose API did not return a task id", headers={"X-NeoTalk-Failure-Stage": "submit"})
     return JSONResponse(
         status_code=202,
         content={"status": "queued", "task_id": task_id, "phrase": phrase},
@@ -215,14 +244,26 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
         file_url = upstream.payload.get("file_url")
         if not isinstance(file_url, str) or not file_url:
             raise HTTPException(
-                status_code=502, detail="pose API did not return a pose file"
+                status_code=502, detail="pose API did not return a pose file", headers={"X-NeoTalk-Failure-Stage": "task_status"}
             )
         try:
+            download_started = time.perf_counter()
             raw = neotalk_client.download_pose(file_url)
+            logging.getLogger("uvicorn.error").info(
+                "pose_pipeline trace_id=%s stage=download status=200 elapsed_ms=%s",
+                request.state.pose_trace_id,
+                round((time.perf_counter() - download_started) * 1000),
+            )
+            validation_started = time.perf_counter()
             record = persist_pose(
                 name=pose_name,
                 fps=settings.mvp_pose_fps,
                 raw=raw,
+            )
+            logging.getLogger("uvicorn.error").info(
+                "pose_pipeline trace_id=%s stage=validation status=200 elapsed_ms=%s",
+                request.state.pose_trace_id,
+                round((time.perf_counter() - validation_started) * 1000),
             )
         except NeoTalkApiError as exception:
             raise mvp_error(exception) from exception
@@ -230,6 +271,7 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
             raise HTTPException(
                 status_code=502,
                 detail=f"generated pose is invalid: {exception.detail}",
+                headers={"X-NeoTalk-Failure-Stage": "validation"},
             ) from exception
 
     return {

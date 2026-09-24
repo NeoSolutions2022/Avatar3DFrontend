@@ -14,10 +14,12 @@ TASK_ID_RE = re.compile(r"^[A-Za-z0-9-]{1,100}$")
 
 
 class NeoTalkApiError(RuntimeError):
-    def __init__(self, detail: str, *, status_code: int = 502):
+    def __init__(self, detail: str, *, status_code: int = 502, stage: str = "unknown", upstream_status: int | None = None):
         super().__init__(detail)
         self.detail = detail
         self.status_code = status_code
+        self.stage = stage
+        self.upstream_status = upstream_status
 
 
 @dataclass(frozen=True)
@@ -51,7 +53,7 @@ class NeoTalkClient:
     def download_pose(self, file_url: str) -> bytes:
         parsed = urlparse(file_url)
         if parsed.scheme != "https" or not parsed.netloc:
-            raise NeoTalkApiError("pose service returned an invalid file URL")
+            raise NeoTalkApiError("pose service returned an invalid file URL", stage="download")
 
         request = Request(file_url, headers={"Accept": "text/plain"})
         try:
@@ -59,13 +61,13 @@ class NeoTalkClient:
                 raw = response.read(self.settings.max_pose_bytes + 1)
         except HTTPError as exception:
             raise NeoTalkApiError(
-                f"pose file is unavailable (HTTP {exception.code})"
+                f"pose file is unavailable (HTTP {exception.code})", stage="download", upstream_status=exception.code
             ) from exception
         except (TimeoutError, URLError) as exception:
-            raise NeoTalkApiError("could not download the generated pose") from exception
+            raise NeoTalkApiError("could not download the generated pose", stage="download") from exception
 
         if len(raw) > self.settings.max_pose_bytes:
-            raise NeoTalkApiError("generated pose exceeds the configured size limit")
+            raise NeoTalkApiError("generated pose exceeds the configured size limit", stage="download")
         return raw
 
     def _json_request(
@@ -76,9 +78,10 @@ class NeoTalkClient:
         body: bytes | None = None,
         content_type: str | None = None,
     ) -> NeoTalkResponse:
+        stage = "submit" if method == "POST" else "task_status"
         if not self.configured:
             raise NeoTalkApiError(
-                "NeoTalk pose API is not configured", status_code=503
+                "NeoTalk pose API is not configured", status_code=503, stage=stage
             )
 
         headers = {
@@ -97,20 +100,20 @@ class NeoTalkClient:
         except HTTPError as exception:
             raw = exception.read(1_048_577)
             detail = self._error_detail(raw, exception.code)
-            raise NeoTalkApiError(detail) from exception
+            raise NeoTalkApiError(detail, stage=stage, upstream_status=exception.code) from exception
         except (TimeoutError, URLError) as exception:
-            raise NeoTalkApiError("NeoTalk pose API is unavailable") from exception
+            raise NeoTalkApiError("NeoTalk pose API is unavailable", stage=stage) from exception
 
         if len(raw) > 1_048_576:
-            raise NeoTalkApiError("NeoTalk pose API returned an oversized response")
+            raise NeoTalkApiError("NeoTalk pose API returned an oversized response", stage=stage)
         if not raw and status_code == 202:
             return NeoTalkResponse(status_code, {})
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exception:
-            raise NeoTalkApiError("NeoTalk pose API returned invalid JSON") from exception
+            raise NeoTalkApiError("NeoTalk pose API returned invalid JSON", stage=stage) from exception
         if not isinstance(payload, dict):
-            raise NeoTalkApiError("NeoTalk pose API returned an invalid response")
+            raise NeoTalkApiError("NeoTalk pose API returned an invalid response", stage=stage)
         return NeoTalkResponse(status_code, payload)
 
     @staticmethod

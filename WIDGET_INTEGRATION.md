@@ -126,6 +126,8 @@ avatarFrame.contentWindow.postMessage(
 
 O cache é deliberadamente temporário: ele desaparece ao recarregar o widget e nunca mistura sessões de usuários diferentes.
 
+Quando há duas saídas da mesma sala, o widget que recebe `neotalk:sign` emite `neotalk:pose-ready` com `phrase`, `pose` e `words` assim que a tarefa termina. O controlador pode encaminhar esses dados ao segundo widget com `{ type: "neotalk:load-pose", phrase, pose, words }`. O segundo widget reproduz a pose sem criar outra tarefa. A capacidade `shared-pose` em `neotalk:ready` indica suporte a esse comando; o controlador deve aguardar `ready` de cada saída. A URL em `pose.content_url` precisa pertencer ao próprio servidor do widget.
+
 ## 3. Parametros da URL
 
 | Parametro | Valores | Padrao | Finalidade |
