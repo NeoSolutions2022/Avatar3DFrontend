@@ -128,6 +128,8 @@ O cache é deliberadamente temporário: ele desaparece ao recarregar o widget e 
 
 Quando há duas saídas da mesma sala, o widget que recebe `neotalk:sign` emite `neotalk:pose-ready` com `phrase`, `pose` e `words` assim que a tarefa termina. O controlador pode encaminhar esses dados ao segundo widget com `{ type: "neotalk:load-pose", phrase, pose, words }`. O segundo widget reproduz a pose sem criar outra tarefa. A capacidade `shared-pose` em `neotalk:ready` indica suporte a esse comando; o controlador deve aguardar `ready` de cada saída. A URL em `pose.content_url` precisa pertencer ao próprio servidor do widget.
 
+O widget emite `neotalk:pose-stage` para `pose_available`, `load_sent`, `unity_ack`, `unity_ack_timeout`, `unity_load_error`, `play_requested` e `cancelled`. Cada evento inclui `loadId`, `correlationId`, `poseId`, tentativa e tempos disponíveis; `traceId` liga a resposta da API aos logs do backend. O carregamento tenta novamente a mesma URL uma vez antes de reportar `pose_ack_timeout`/`pose_load_failed`, sem criar uma nova tarefa nem exibir alerta vermelho no widget. `play_requested` registra o comando enviado ao Unity, não comprova visualmente a animação. O callback atual do Unity informa apenas sucesso/erro, sem identidade da pose (`acknowledgedPoseId: false`); para confirmação inequívoca, o build Unity precisará devolver o `loadId` no evento `avatar3d-pose-load`.
+
 ## 3. Parametros da URL
 
 | Parametro | Valores | Padrao | Finalidade |

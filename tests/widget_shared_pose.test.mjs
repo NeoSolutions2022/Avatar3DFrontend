@@ -83,3 +83,53 @@ test('the primary widget shares one completed pose before playback', async () =>
   assert.ok(readyIndex >= 0 && readyIndex < playingIndex);
   assert.equal(emitted[readyIndex].pose.content_url, '/api/v1/poses/id/content');
 });
+
+test('a missing Unity acknowledgement retries the same pose without a new translation task', async () => {
+  const emitted = [];
+  const listeners = new Map();
+  const element = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, hidden: false, textContent: '' });
+  let signRequests = 0;
+  let timeoutFires = 0;
+  const window = {
+    location: { origin: 'https://avatar.example', search: '' },
+    parent: { postMessage: (message) => emitted.push(message) },
+    addEventListener: (name, handler) => listeners.set(name, handler),
+    setTimeout: (callback, delay) => {
+      if (delay === 28000 && timeoutFires++ === 0) queueMicrotask(callback);
+      return 1;
+    },
+    clearTimeout() {},
+    devicePixelRatio: 1,
+  };
+  const sandbox = {
+    window,
+    document: { querySelector: element, documentElement: { style: { setProperty() {} } }, referrer: '' },
+    URL,
+    URLSearchParams,
+    setTimeout,
+    clearTimeout,
+    queueMicrotask,
+    listeners,
+    poseLoads: 0,
+    fetch: async (path) => {
+      if (path === '/api/v1/mvp/sign') signRequests += 1;
+      return new Promise(() => {});
+    },
+  };
+  const context = vm.createContext(sandbox);
+  vm.runInContext(source, context);
+  vm.runInContext(`state.unity = { SendMessage(_target, method) { if (method === 'LoadPoseUrl' && ++poseLoads === 2) queueMicrotask(() => listeners.get('avatar3d-pose-load')({ detail: { status: 'success' } })); } };`, context);
+  sandbox.message = { type: 'neotalk:load-pose', phrase: 'TESTE', pose: { content_url: '/api/v1/poses/id/content', fps: 24 }, words: ['TESTE'] };
+  await vm.runInContext('runCommand(message)', context);
+  assert.equal(sandbox.poseLoads, 2);
+  assert.equal(signRequests, 0);
+  assert.ok(emitted.some(({ type, stage, attempt }) => type === 'neotalk:pose-stage' && stage === 'unity_ack_timeout' && attempt === 1));
+  assert.ok(emitted.some(({ type, stage, attempt }) => type === 'neotalk:pose-stage' && stage === 'play_requested' && attempt === 2));
+  assert.ok(emitted.some(({ type }) => type === 'neotalk:playing'));
+  assert.ok(!emitted.some(({ type }) => type === 'neotalk:error'));
+  vm.runInContext("state.allowedOrigins = ['https://platform.example']", context);
+  listeners.get('message')({ source: window.parent, origin: 'https://platform.example', data: { type: 'neotalk:replay', phrase: 'AUSENTE' } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(emitted.some(({ type, code }) => type === 'neotalk:error' && code === 'pose_cache_miss'));
+  assert.equal(vm.runInContext('elements.error.textContent', context), '');
+});
