@@ -9,6 +9,7 @@ const pollScheduleMs = [0, 300, 500, 800, 1200];
 // anterior, mesmo estabilizando as consultas seguintes em 1,2 segundo.
 const maxPollAttempts = 250;
 const maxCachedPoses = 24;
+const initialControllerWindow = window.parent;
 
 const state = {
   allowedOrigins: [],
@@ -396,8 +397,17 @@ async function runCommand(message) {
   }
 }
 
+function controllerSourceAllowed(source) {
+  if (source === window.parent || source === initialControllerWindow) return true;
+  try {
+    return Boolean(window.parent.opener) && source === window.parent.opener;
+  } catch (_) {
+    return false;
+  }
+}
+
 window.addEventListener("message", (event) => {
-  if (event.source !== window.parent || !originAllowed(event.origin)) return;
+  if (!controllerSourceAllowed(event.source) || !originAllowed(event.origin)) return;
   const message = event.data;
   if (!message || typeof message !== "object" || !String(message.type || "").startsWith("neotalk:")) return;
   state.trustedParentOrigin = event.origin;
