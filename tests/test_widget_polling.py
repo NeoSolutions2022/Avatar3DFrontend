@@ -26,6 +26,8 @@ def test_widget_keeps_the_last_delay_after_the_ramp() -> None:
         "pollScheduleMs[Math.min(attempt, pollScheduleMs.length - 1)]"
         in WIDGET_SOURCE
     )
+
+
 def test_widget_retries_transient_sign_submission_without_sticky_error() -> None:
     assert "clearError();" in WIDGET_SOURCE
     assert "[408, 429, 500, 502, 503, 504].includes(error.status)" in WIDGET_SOURCE
