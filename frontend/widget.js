@@ -315,13 +315,25 @@ async function requestSign(rawPhrase) {
   if (!phrase) throw new Error("A frase está vazia.");
   if (phrase.length > 500) throw new Error("A frase excede o limite de 500 caracteres.");
   const sequence = ++state.requestSequence;
+  clearError();
   emitStatus("queued", { phrase });
 
-  const { payload } = await api("/api/v1/mvp/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phrase }),
-  });
+  let payload;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      ({ payload } = await api("/api/v1/mvp/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phrase }),
+      }));
+      break;
+    } catch (error) {
+      const transient = [408, 429, 500, 502, 503, 504].includes(error.status);
+      if (!transient || attempt >= 2 || sequence !== state.requestSequence) throw error;
+      emitStatus("processing", { phrase, recovering: true });
+      await wait(350 * (attempt + 1));
+    }
+  }
 
   let transientFailures = 0;
   for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
