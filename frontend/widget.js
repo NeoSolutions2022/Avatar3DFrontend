@@ -9,6 +9,7 @@ const pollScheduleMs = [0, 300, 500, 800, 1200];
 // anterior, mesmo estabilizando as consultas seguintes em 1,2 segundo.
 const maxPollAttempts = 250;
 const maxCachedPoses = 24;
+const initialControllerWindow = window.parent;
 
 const state = {
   allowedOrigins: [],
@@ -315,13 +316,25 @@ async function requestSign(rawPhrase) {
   if (!phrase) throw new Error("A frase está vazia.");
   if (phrase.length > 500) throw new Error("A frase excede o limite de 500 caracteres.");
   const sequence = ++state.requestSequence;
+  clearError();
   emitStatus("queued", { phrase });
 
-  const { payload } = await api("/api/v1/mvp/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phrase }),
-  });
+  let payload;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      ({ payload } = await api("/api/v1/mvp/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phrase }),
+      }));
+      break;
+    } catch (error) {
+      const transient = [408, 429, 500, 502, 503, 504].includes(error.status);
+      if (!transient || attempt >= 2 || sequence !== state.requestSequence) throw error;
+      emitStatus("processing", { phrase, recovering: true });
+      await wait(350 * (attempt + 1));
+    }
+  }
 
   let transientFailures = 0;
   for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
@@ -396,8 +409,17 @@ async function runCommand(message) {
   }
 }
 
+function controllerSourceAllowed(source) {
+  if (source === window.parent || source === initialControllerWindow) return true;
+  try {
+    return Boolean(window.parent.opener) && source === window.parent.opener;
+  } catch (_) {
+    return false;
+  }
+}
+
 window.addEventListener("message", (event) => {
-  if (event.source !== window.parent || !originAllowed(event.origin)) return;
+  if (!controllerSourceAllowed(event.source) || !originAllowed(event.origin)) return;
   const message = event.data;
   if (!message || typeof message !== "object" || !String(message.type || "").startsWith("neotalk:")) return;
   state.trustedParentOrigin = event.origin;
