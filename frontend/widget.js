@@ -9,6 +9,8 @@ const pollScheduleMs = [0, 300, 500, 800, 1200];
 // anterior, mesmo estabilizando as consultas seguintes em 1,2 segundo.
 const maxPollAttempts = 250;
 const maxCachedPoses = 24;
+const poseAckTimeoutMs = 28000;
+const maxPoseLoadAttempts = 2;
 const initialControllerWindow = window.parent;
 
 const state = {
@@ -23,6 +25,7 @@ const state = {
   loaderScript: null,
   runtimeSequence: 0,
   requestSequence: 0,
+  poseLoadSequence: 0,
   activePose: null,
   pendingPoseLoad: null,
   poseCache: new Map(),
@@ -94,6 +97,30 @@ function postToParent(type, detail = {}) {
 
 function emitStatus(status, detail = {}) {
   postToParent("neotalk:status", { status, ...detail });
+}
+
+function nextPoseLoadId() {
+  state.poseLoadSequence += 1;
+  return `${Date.now().toString(36)}-${state.poseLoadSequence}`;
+}
+
+function reportPoseStage(stage, context, detail = {}) {
+  postToParent("neotalk:pose-stage", {
+    stage,
+    loadId: context.loadId,
+    correlationId: context.correlationId || context.loadId,
+    traceId: context.traceId || null,
+    taskId: context.taskId || null,
+    poseId: context.poseId,
+    ...detail,
+  });
+}
+
+function poseNetworkTiming(url, startedAt) {
+  if (typeof performance === "undefined" || typeof performance.getEntriesByName !== "function") return null;
+  const entries = performance.getEntriesByName(url, "resource");
+  const entry = entries.filter((item) => item.startTime >= startedAt - 1).at(-1);
+  return entry ? Math.round(entry.responseEnd - entry.startTime) : null;
 }
 
 function showError(message, code = "widget_error") {
@@ -271,12 +298,20 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   if (resumePose) await loadPose(resumePose);
 }
 
-async function loadPose(pose) {
+async function loadPose(pose, options = {}) {
   if (!state.unity) throw new Error("O avatar ainda não está pronto.");
   if (!pose || !pose.content_url) throw new Error("A resposta não contém uma pose válida.");
+  const url = resolvePoseUrl(pose.content_url);
+  const context = {
+    loadId: options.loadId || nextPoseLoadId(),
+    correlationId: options.correlationId,
+    traceId: options.traceId,
+    taskId: options.taskId,
+    poseId: new URL(url).pathname.split("/").at(-2) || "unknown",
+  };
   clearError();
-  state.activePose = pose;
-  emitStatus("loading_pose");
+  emitStatus("loading_pose", { loadId: context.loadId });
+  reportPoseStage("pose_available", context);
   sendUnity("SetFps", pose.fps || 30);
   sendUnity("SetLoop", state.loop ? "true" : "false");
 
@@ -288,25 +323,56 @@ async function loadPose(pose) {
     state.pendingPoseLoad = null;
   }
 
-  await new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      state.pendingPoseLoad = null;
-      reject(new Error("O avatar não confirmou o carregamento da pose."));
-    }, 45000);
-    state.pendingPoseLoad = { resolve, reject, timeout };
-    sendUnity("LoadPoseUrl", resolvePoseUrl(pose.content_url));
-  });
-
-  sendUnity("SetLoop", state.loop ? "true" : "false");
-  sendUnity("PlayFromStart");
+  for (let attempt = 1; attempt <= maxPoseLoadAttempts; attempt += 1) {
+    const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
+    const startedAtWall = Date.now();
+    reportPoseStage("load_sent", context, { attempt });
+    try {
+      await new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          state.pendingPoseLoad = null;
+          const error = new Error("O avatar não confirmou o carregamento da pose.");
+          error.code = "pose_ack_timeout";
+          reject(error);
+        }, poseAckTimeoutMs);
+        state.pendingPoseLoad = { resolve, reject, timeout, loadId: context.loadId, attempt };
+        sendUnity("LoadPoseUrl", url);
+      });
+      reportPoseStage("unity_ack", context, { attempt, elapsedMs: Date.now() - startedAtWall, networkMs: poseNetworkTiming(url, startedAt), acknowledgedPoseId: false });
+      state.activePose = pose;
+      sendUnity("SetLoop", state.loop ? "true" : "false");
+      sendUnity("PlayFromStart");
+      reportPoseStage("play_requested", context, { attempt });
+      return context;
+    } catch (error) {
+      if (error.name === "AbortError") {
+        reportPoseStage("cancelled", context, { attempt });
+        throw error;
+      }
+      reportPoseStage(error.code === "pose_ack_timeout" ? "unity_ack_timeout" : "unity_load_error", context, {
+        attempt,
+        elapsedMs: Date.now() - startedAtWall,
+        networkMs: poseNetworkTiming(url, startedAt),
+      });
+      if (attempt === maxPoseLoadAttempts) {
+        error.code = error.code || "pose_load_failed";
+        error.loadId = context.loadId;
+        error.correlationId = context.correlationId || context.loadId;
+        error.traceId = context.traceId || null;
+        throw error;
+      }
+      emitStatus("recovering", { loadId: context.loadId });
+    }
+  }
 }
 
 window.addEventListener("avatar3d-pose-load", (event) => {
   const pending = state.pendingPoseLoad;
   if (!pending) return;
+  const detail = event.detail || {};
+  if (detail.loadId && detail.loadId !== pending.loadId) return;
   state.pendingPoseLoad = null;
   clearTimeout(pending.timeout);
-  const detail = event.detail || {};
   if (detail.status === "success") pending.resolve();
   else pending.reject(new Error(detail.message || "Falha ao carregar a pose."));
 });
@@ -354,11 +420,13 @@ async function requestSign(rawPhrase) {
         : [];
       if (sequence !== state.requestSequence) return;
       cachePose(phrase, result.payload.pose, words);
-      postToParent("neotalk:pose-ready", { phrase, pose: result.payload.pose, words, taskId: payload.task_id });
-      await loadPose(result.payload.pose);
+      const loadId = nextPoseLoadId();
+      const traceId = result.response.headers.get("X-NeoTalk-Trace-ID");
+      postToParent("neotalk:pose-ready", { phrase, pose: result.payload.pose, words, taskId: payload.task_id, loadId, traceId });
+      await loadPose(result.payload.pose, { loadId, taskId: payload.task_id, traceId });
       if (sequence !== state.requestSequence) return;
       emitStatus("playing", { phrase, words, taskId: payload.task_id });
-      postToParent("neotalk:playing", { phrase, words, taskId: payload.task_id });
+      postToParent("neotalk:playing", { phrase, words, taskId: payload.task_id, loadId, traceId });
       return;
     } catch (error) {
       if (error.status === 502 && transientFailures < 5) {
@@ -380,10 +448,11 @@ async function replayCachedPhrase(rawPhrase) {
     throw error;
   }
   emitStatus("loading_pose", { phrase, cached: true });
-  postToParent("neotalk:pose-ready", { phrase, pose: cached.pose, words: cached.words, cached: true });
-  await loadPose(cached.pose);
+  const loadId = nextPoseLoadId();
+  postToParent("neotalk:pose-ready", { phrase, pose: cached.pose, words: cached.words, cached: true, loadId });
+  await loadPose(cached.pose, { loadId });
   emitStatus("playing", { phrase, words: cached.words, cached: true });
-  postToParent("neotalk:playing", { phrase, words: cached.words, cached: true });
+  postToParent("neotalk:playing", { phrase, words: cached.words, cached: true, loadId });
 }
 
 async function playSharedPose(message) {
@@ -394,9 +463,9 @@ async function playSharedPose(message) {
   // URL is additionally restricted to this widget's origin by loadPose().
   const words = Array.isArray(message.words) ? message.words.map(String).slice(0, 100) : [];
   cachePose(phrase, pose, words);
-  await loadPose(pose);
+  const context = await loadPose(pose, { correlationId: message.loadId || message.correlationId, traceId: message.traceId, taskId: message.taskId });
   emitStatus("playing", { phrase, words, shared: true });
-  postToParent("neotalk:playing", { phrase, words, shared: true });
+  postToParent("neotalk:playing", { phrase, words, shared: true, loadId: context.loadId, correlationId: context.correlationId, traceId: context.traceId });
 }
 
 async function runCommand(message) {
@@ -446,7 +515,13 @@ window.addEventListener("message", (event) => {
   state.trustedParentOrigin = event.origin;
   runCommand(message).catch((error) => {
     if (error.name === "AbortError") return;
+    if (["pose_ack_timeout", "pose_load_failed", "pose_cache_miss"].includes(error.code)) {
+      clearError();
+      postToParent("neotalk:error", { code: error.code, message: error.message, loadId: error.loadId, correlationId: error.correlationId, traceId: error.traceId });
+      return;
+    }
     if ([408, 429, 500, 502, 503, 504].includes(error.status)) {
+      clearError();
       emitStatus("recovering", { stage: error.stage || "unknown" });
       postToParent("neotalk:error", { code: "transient_api_error", message: `Falha HTTP ${error.status}`, stage: error.stage || "unknown", traceId: error.traceId || null });
       return;
