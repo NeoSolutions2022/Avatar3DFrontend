@@ -20,7 +20,7 @@ os.environ["AVATAR3D_WIDGET_ORIGINS"] = "https://portal.example,http://localhost
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app, settings as app_settings, storage  # noqa: E402
-from app.neotalk import NeoTalkResponse  # noqa: E402
+from app.neotalk import NeoTalkApiError, NeoTalkResponse  # noqa: E402
 
 
 def first_frame(text: str) -> str:
@@ -211,6 +211,17 @@ class PoseApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ready")
         self.assertEqual(payload["palavras_encontradas"], ["cadeira.pose"])
         self.assertIn("/content", payload["pose"]["content_url"])
+
+    @patch("app.main.neotalk_client.submit_phrase")
+    def test_pose_error_identifies_stage_and_upstream_status(self, submit_phrase) -> None:
+        submit_phrase.side_effect = NeoTalkApiError(
+            "temporary upstream failure", stage="submit", upstream_status=502
+        )
+        response = self.client.post("/api/v1/mvp/sign", json={"phrase": "TESTE"})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.headers["x-neotalk-failure-stage"], "submit")
+        self.assertEqual(response.headers["x-neotalk-upstream-status"], "502")
+        self.assertEqual(len(response.headers["x-neotalk-trace-id"]), 12)
 
 
 if __name__ == "__main__":

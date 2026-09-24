@@ -113,8 +113,10 @@ async function api(path, options = {}) {
   let payload = {};
   try { payload = await response.json(); } catch (_) { /* empty body */ }
   if (!response.ok && response.status !== 202) {
-    const error = new Error(payload.detail || `Falha HTTP ${response.status}`);
+    const error = new Error(typeof payload.detail === "string" ? payload.detail : `Falha HTTP ${response.status}`);
     error.status = response.status;
+    error.stage = response.headers.get("X-NeoTalk-Failure-Stage") || (path === "/api/v1/mvp/sign" ? "submit" : "task_status");
+    error.traceId = response.headers.get("X-NeoTalk-Trace-ID");
     throw error;
   }
   return { response, payload };
@@ -263,7 +265,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   postToParent("neotalk:ready", {
     version: "2026.09.18-elia.13",
     avatars: [...supportedAvatars],
-    capabilities: ["sign", "replay", "avatar", "zoom", "loop", "background", "playback"],
+    capabilities: ["sign", "replay", "shared-pose", "avatar", "zoom", "loop", "background", "playback"],
   });
 
   if (resumePose) await loadPose(resumePose);
@@ -347,12 +349,14 @@ async function requestSign(rawPhrase) {
         emitStatus("processing", { phrase, taskId: payload.task_id });
         continue;
       }
-      await loadPose(result.payload.pose);
-      if (sequence !== state.requestSequence) return;
       const words = Array.isArray(result.payload.palavras_encontradas)
         ? result.payload.palavras_encontradas.map((word) => String(word).replace(/\.pose$/i, ""))
         : [];
+      if (sequence !== state.requestSequence) return;
       cachePose(phrase, result.payload.pose, words);
+      postToParent("neotalk:pose-ready", { phrase, pose: result.payload.pose, words, taskId: payload.task_id });
+      await loadPose(result.payload.pose);
+      if (sequence !== state.requestSequence) return;
       emitStatus("playing", { phrase, words, taskId: payload.task_id });
       postToParent("neotalk:playing", { phrase, words, taskId: payload.task_id });
       return;
@@ -376,9 +380,23 @@ async function replayCachedPhrase(rawPhrase) {
     throw error;
   }
   emitStatus("loading_pose", { phrase, cached: true });
+  postToParent("neotalk:pose-ready", { phrase, pose: cached.pose, words: cached.words, cached: true });
   await loadPose(cached.pose);
   emitStatus("playing", { phrase, words: cached.words, cached: true });
   postToParent("neotalk:playing", { phrase, words: cached.words, cached: true });
+}
+
+async function playSharedPose(message) {
+  const phrase = String(message.phrase || "").replace(/\s+/g, " ").trim();
+  const pose = message.pose;
+  if (!phrase || !pose || typeof pose.content_url !== "string") throw new Error("Pose compartilhada inválida.");
+  // The widget accepts commands only from its authorized controller; the pose
+  // URL is additionally restricted to this widget's origin by loadPose().
+  const words = Array.isArray(message.words) ? message.words.map(String).slice(0, 100) : [];
+  cachePose(phrase, pose, words);
+  await loadPose(pose);
+  emitStatus("playing", { phrase, words, shared: true });
+  postToParent("neotalk:playing", { phrase, words, shared: true });
 }
 
 async function runCommand(message) {
@@ -388,6 +406,9 @@ async function runCommand(message) {
       break;
     case "neotalk:replay":
       await replayCachedPhrase(message.phrase);
+      break;
+    case "neotalk:load-pose":
+      await playSharedPose(message);
       break;
     case "neotalk:set-avatar":
       await initializeAvatar(String(message.avatar || "").toLowerCase());
@@ -424,7 +445,13 @@ window.addEventListener("message", (event) => {
   if (!message || typeof message !== "object" || !String(message.type || "").startsWith("neotalk:")) return;
   state.trustedParentOrigin = event.origin;
   runCommand(message).catch((error) => {
-    if (error.name !== "AbortError") showError(error.message, error.code || "command_failed");
+    if (error.name === "AbortError") return;
+    if ([408, 429, 500, 502, 503, 504].includes(error.status)) {
+      emitStatus("recovering", { stage: error.stage || "unknown" });
+      postToParent("neotalk:error", { code: "transient_api_error", message: `Falha HTTP ${error.status}`, stage: error.stage || "unknown", traceId: error.traceId || null });
+      return;
+    }
+    showError(error.message, error.code || "command_failed");
   });
 });
 
