@@ -158,7 +158,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20260929-elia18");
+  url.searchParams.set("build", manifest.builtAtUtc || "20260929-elia19");
   return url.href;
 }
 
@@ -267,7 +267,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.09.29-elia.18",
+      productVersion: "2026.09.29-elia.19",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -290,7 +290,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   elements.loader.classList.add("hidden");
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.09.29-elia.18",
+    version: "2026.09.29-elia.19",
     avatars: [...supportedAvatars],
     capabilities: ["sign", "replay", "shared-pose", "avatar", "zoom", "loop", "background", "playback"],
   });
