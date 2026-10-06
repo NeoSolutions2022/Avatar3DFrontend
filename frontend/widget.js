@@ -27,6 +27,7 @@ const state = {
   requestSequence: 0,
   poseLoadSequence: 0,
   activePose: null,
+  activePoseRuntimeSequence: null,
   pendingPoseLoad: null,
   poseCache: new Map(),
 };
@@ -310,10 +311,23 @@ async function loadPose(pose, options = {}) {
     poseId: new URL(url).pathname.split("/").at(-2) || "unknown",
   };
   clearError();
-  emitStatus("loading_pose", { loadId: context.loadId });
   reportPoseStage("pose_available", context);
   sendUnity("SetFps", pose.fps || 30);
   sendUnity("SetLoop", state.loop ? "true" : "false");
+
+  // Recarregar a pose ativa reinicia a preparação corporal do Unity. O loop
+  // deve reiniciar a reprodução existente, sem recriar os dados de retarget.
+  // Uma nova instância do avatar precisa carregar a pose normalmente.
+  if (!state.pendingPoseLoad
+      && state.activePoseRuntimeSequence === state.runtimeSequence
+      && state.activePose?.content_url
+      && resolvePoseUrl(state.activePose.content_url) === url) {
+    sendUnity("PlayFromStart");
+    reportPoseStage("play_requested", context, { cached: true, reloaded: false });
+    return context;
+  }
+
+  emitStatus("loading_pose", { loadId: context.loadId });
 
   if (state.pendingPoseLoad) {
     clearTimeout(state.pendingPoseLoad.timeout);
@@ -340,6 +354,7 @@ async function loadPose(pose, options = {}) {
       });
       reportPoseStage("unity_ack", context, { attempt, elapsedMs: Date.now() - startedAtWall, networkMs: poseNetworkTiming(url, startedAt), acknowledgedPoseId: false });
       state.activePose = pose;
+      state.activePoseRuntimeSequence = state.runtimeSequence;
       sendUnity("SetLoop", state.loop ? "true" : "false");
       sendUnity("PlayFromStart");
       reportPoseStage("play_requested", context, { attempt });
