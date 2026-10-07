@@ -85,3 +85,23 @@ test('Unity JS bridge preserves native payload without inventing completion', (t
   assert.equal(event.detail.status, 'preparing');
   assert.equal(event.detail.playbackId, 'a');
 });
+
+test('silent native preview reveals a rendered posture without completing a room phrase', async () => {
+  const r = runtime();
+  r.report({ status: 'ready' });
+  await r.load({ content_url: '/StreamingAssets/preview.pose' }, { preview: true });
+  r.report({ status: 'preparing', playbackId: 'play-1', frame: 0, frameCount: 10 });
+  assert.equal(r.commands.some(c => c.method === 'PausePlayback'), false);
+  r.report({ status: 'started', playbackId: 'play-1', frame: 0, frameCount: 10 });
+  assert.equal(r.commands.at(-1).method, 'PausePlayback');
+  assert.equal(r.events.length, 0);
+  await r.load({ content_url: '/real.pose' });
+  r.report({ status: 'started', playbackId: 'play-2', frame: 0, frameCount: 10 });
+  assert.equal(r.events.at(-1).status, 'started');
+});
+
+test('Elia initialization prepares its bundled preview before announcing readiness', () => {
+  const init = source.slice(source.indexOf('async function initializeAvatar'), source.indexOf('async function loadPose'));
+  assert.ok(init.indexOf('{ preview: true }') < init.indexOf('emitStatus("ready")'));
+  assert.match(init, /StreamingAssets\/frase_hoje_eu_aprender_libras_entao_comunicacao_melhorar\.pose/);
+});

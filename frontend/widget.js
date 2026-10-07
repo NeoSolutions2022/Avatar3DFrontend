@@ -307,6 +307,12 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
     elements.loaderTitle.textContent = "Pronta para sinalizar";
     elements.loaderMessage.textContent = "Aguardando o primeiro trecho...";
   }
+  // A preview has no speech command to unlock the native loading cover.
+  // Prepare the bundled source, then hold its first actually rendered frame.
+  // This is presentation only: never report it as a translated room phrase.
+  if (state.nativePlayback && !resumePose && avatarId === "elia") {
+    await loadPose({ content_url: new URL("StreamingAssets/frase_hoje_eu_aprender_libras_entao_comunicacao_melhorar.pose", runtimeBase).href, fps: 30 }, { preview: true });
+  }
   emitStatus("ready");
   postToParent("neotalk:ready", {
     version: "2026.10.02-elia.23",
@@ -327,6 +333,7 @@ async function loadPose(pose, options = {}) {
     traceId: options.traceId,
     taskId: options.taskId,
     poseId: new URL(url).pathname.split("/").at(-2) || "unknown",
+    preview: options.preview === true,
   };
   clearError();
   reportPoseStage("pose_available", context);
@@ -428,6 +435,13 @@ window.addEventListener("avatar3d-playback", (event) => {
       || detail.frame < 0 || detail.frameCount < 1 || detail.frame >= detail.frameCount) return;
   if (detail.status === "finished" && detail.frame !== detail.frameCount - 1) return;
   if (detail.status === "started" || detail.status === "progress" || detail.status === "finished") elements.loader.classList.add("hidden");
+  if (context.preview) {
+    if (detail.status === "started" || detail.status === "progress" || detail.status === "finished") {
+      sendUnity("PausePlayback");
+      context.finished = true;
+    }
+    return;
+  }
   if (detail.status === "finished") context.finished = true;
   postToParent("neotalk:playback-frame", {
     status: detail.status, loadId: context.loadId,
