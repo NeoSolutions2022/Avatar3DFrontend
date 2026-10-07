@@ -113,7 +113,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20261007-elia25");
+  url.searchParams.set("build", manifest.builtAtUtc || "20261007-elia27");
   return url.href;
 }
 
@@ -214,7 +214,7 @@ async function initializeAvatar(avatarId = selectedAvatar) {
         streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
         companyName: "NeoTalk",
         productName: `NeoTalk ${selectedAvatarName}`,
-        productVersion: "2026.10.07-elia.25",
+        productVersion: "2026.10.07-elia.27",
         matchWebGLToCanvasSize: true,
         // LIA has finer facial and hand geometry. A slightly higher cap keeps
         // fingers and blend-shape contours crisp on high-density mobile screens

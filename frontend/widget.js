@@ -27,8 +27,14 @@ const state = {
   requestSequence: 0,
   poseLoadSequence: 0,
   activePose: null,
+  activePoseRuntimeSequence: null,
   pendingPoseLoad: null,
   poseCache: new Map(),
+  prefetchTasks: new Map(),
+  prefetchedPoses: new Map(),
+  prefetchGeneration: 0,
+  nativePlayback: false,
+  playbackContext: null,
 };
 if (!state.zoom) state.zoom = defaults[state.avatar];
 
@@ -158,7 +164,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20261007-elia25");
+  url.searchParams.set("build", manifest.builtAtUtc || "20261007-elia27");
   return url.href;
 }
 
@@ -208,6 +214,7 @@ async function readCatalogAvatar(avatarId) {
 async function unloadRuntime() {
   const previous = state.unity;
   state.unity = null;
+  state.playbackContext = null;
   if (previous?.Quit) {
     try { await previous.Quit(); } catch (_) { /* runtime already closed */ }
   }
@@ -215,10 +222,16 @@ async function unloadRuntime() {
     state.loaderScript.remove();
     state.loaderScript = null;
   }
+  state.nativePlayback = false;
 }
 
 async function initializeAvatar(avatarId, resumePose = state.activePose) {
   if (!supportedAvatars.has(avatarId)) throw new Error("Avatar inválido.");
+  if (avatarId !== state.avatar) {
+    state.prefetchGeneration += 1;
+    state.prefetchedPoses.clear();
+    state.prefetchTasks.clear();
+  }
   const sequence = ++state.runtimeSequence;
   if (state.pendingPoseLoad) {
     clearTimeout(state.pendingPoseLoad.timeout);
@@ -267,7 +280,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.10.07-elia.25",
+      productVersion: "2026.10.07-elia.27",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -287,12 +300,24 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   sendUnity("PausePlayback");
   refreshZoomLabel();
   elements.canvas.setAttribute("aria-label", `Avatar ${avatar.name} 3D`);
-  elements.loader.classList.add("hidden");
+  // A native runtime is technically ready before its first prepared pose is
+  // rendered. Keep the loading cover until that real frame, not the load ACK.
+  if (!state.nativePlayback) elements.loader.classList.add("hidden");
+  else {
+    elements.loaderTitle.textContent = "Pronta para sinalizar";
+    elements.loaderMessage.textContent = "Aguardando o primeiro trecho...";
+  }
+  // A preview has no speech command to unlock the native loading cover.
+  // Prepare the bundled source, then hold its first actually rendered frame.
+  // This is presentation only: never report it as a translated room phrase.
+  if (state.nativePlayback && !resumePose && avatarId === "elia") {
+    await loadPose({ content_url: new URL("StreamingAssets/frase_hoje_eu_aprender_libras_entao_comunicacao_melhorar.pose", runtimeBase).href, fps: 30 }, { preview: true });
+  }
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.10.07-elia.25",
+    version: "2026.10.07-elia.27",
     avatars: [...supportedAvatars],
-    capabilities: ["sign", "replay", "shared-pose", "avatar", "zoom", "loop", "background", "playback"],
+    capabilities: ["sign", "replay", "shared-pose", "prefetch", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
   });
 
   if (resumePose) await loadPose(resumePose);
@@ -308,12 +333,28 @@ async function loadPose(pose, options = {}) {
     traceId: options.traceId,
     taskId: options.taskId,
     poseId: new URL(url).pathname.split("/").at(-2) || "unknown",
+    preview: options.preview === true,
   };
   clearError();
-  emitStatus("loading_pose", { loadId: context.loadId });
   reportPoseStage("pose_available", context);
   sendUnity("SetFps", pose.fps || 30);
   sendUnity("SetLoop", state.loop ? "true" : "false");
+
+  // Recarregar a pose ativa reinicia a preparação corporal do Unity. O loop
+  // deve reiniciar a reprodução existente, sem recriar os dados de retarget.
+  // Uma nova instância do avatar precisa carregar a pose normalmente.
+  if (!state.pendingPoseLoad
+      && state.activePoseRuntimeSequence === state.runtimeSequence
+      && state.activePose?.content_url
+      && resolvePoseUrl(state.activePose.content_url) === url) {
+    state.playbackContext = { ...context, phrase: options.phrase, finished: false };
+    if (state.nativePlayback) sendUnity("SetPlaybackId", context.loadId);
+    sendUnity("PlayFromStart");
+    reportPoseStage("play_requested", context, { cached: true, reloaded: false });
+    return context;
+  }
+
+  emitStatus("loading_pose", { loadId: context.loadId });
 
   if (state.pendingPoseLoad) {
     clearTimeout(state.pendingPoseLoad.timeout);
@@ -340,7 +381,10 @@ async function loadPose(pose, options = {}) {
       });
       reportPoseStage("unity_ack", context, { attempt, elapsedMs: Date.now() - startedAtWall, networkMs: poseNetworkTiming(url, startedAt), acknowledgedPoseId: false });
       state.activePose = pose;
+      state.activePoseRuntimeSequence = state.runtimeSequence;
       sendUnity("SetLoop", state.loop ? "true" : "false");
+      state.playbackContext = { ...context, phrase: options.phrase, finished: false };
+      if (state.nativePlayback) sendUnity("SetPlaybackId", context.loadId);
       sendUnity("PlayFromStart");
       reportPoseStage("play_requested", context, { attempt });
       return context;
@@ -377,16 +421,39 @@ window.addEventListener("avatar3d-pose-load", (event) => {
   else pending.reject(new Error(detail.message || "Falha ao carregar a pose."));
 });
 
+window.addEventListener("avatar3d-playback", (event) => {
+  const detail = event.detail || {};
+  if (detail.status === "ready") {
+    state.nativePlayback = true;
+    return;
+  }
+  if (!state.nativePlayback) return;
+  const context = state.playbackContext;
+  if (!context || detail.playbackId !== context.loadId || context.finished) return;
+  if (!["preparing", "started", "progress", "finished"].includes(detail.status)) return;
+  if (!Number.isInteger(detail.frame) || !Number.isInteger(detail.frameCount)
+      || detail.frame < 0 || detail.frameCount < 1 || detail.frame >= detail.frameCount) return;
+  if (detail.status === "finished" && detail.frame !== detail.frameCount - 1) return;
+  if (detail.status === "started" || detail.status === "progress" || detail.status === "finished") elements.loader.classList.add("hidden");
+  if (context.preview) {
+    if (detail.status === "started" || detail.status === "progress" || detail.status === "finished") {
+      sendUnity("PausePlayback");
+      context.finished = true;
+    }
+    return;
+  }
+  if (detail.status === "finished") context.finished = true;
+  postToParent("neotalk:playback-frame", {
+    status: detail.status, loadId: context.loadId,
+    correlationId: context.correlationId || context.loadId,
+    frame: detail.frame, frameCount: detail.frameCount,
+    revision: detail.revision, fps: detail.fps,
+  });
+});
+
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-async function requestSign(rawPhrase) {
-  const phrase = String(rawPhrase || "").replace(/\s+/g, " ").trim();
-  if (!phrase) throw new Error("A frase está vazia.");
-  if (phrase.length > 500) throw new Error("A frase excede o limite de 500 caracteres.");
-  const sequence = ++state.requestSequence;
-  clearError();
-  emitStatus("queued", { phrase });
-
+async function fetchSignPose(phrase, isCurrent = () => true, quiet = false) {
   let payload;
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -398,8 +465,8 @@ async function requestSign(rawPhrase) {
       break;
     } catch (error) {
       const transient = [408, 429, 500, 502, 503, 504].includes(error.status);
-      if (!transient || attempt >= 2 || sequence !== state.requestSequence) throw error;
-      emitStatus("processing", { phrase, recovering: true });
+      if (!transient || attempt >= 2 || !isCurrent()) throw error;
+      if (!quiet) emitStatus("processing", { phrase, recovering: true });
       await wait(350 * (attempt + 1));
     }
   }
@@ -408,26 +475,19 @@ async function requestSign(rawPhrase) {
   for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
     const delayMs = pollDelayForAttempt(attempt);
     if (delayMs > 0) await wait(delayMs);
-    if (sequence !== state.requestSequence) return;
+    if (!isCurrent()) return null;
     try {
       const result = await api(`/api/v1/mvp/tasks/${encodeURIComponent(payload.task_id)}`);
       if (result.response.status === 202) {
-        emitStatus("processing", { phrase, taskId: payload.task_id });
+        if (!quiet) emitStatus("processing", { phrase, taskId: payload.task_id });
         continue;
       }
       const words = Array.isArray(result.payload.palavras_encontradas)
         ? result.payload.palavras_encontradas.map((word) => String(word).replace(/\.pose$/i, ""))
         : [];
-      if (sequence !== state.requestSequence) return;
+      if (!isCurrent()) return null;
       cachePose(phrase, result.payload.pose, words);
-      const loadId = nextPoseLoadId();
-      const traceId = result.response.headers.get("X-NeoTalk-Trace-ID");
-      postToParent("neotalk:pose-ready", { phrase, pose: result.payload.pose, words, taskId: payload.task_id, loadId, traceId });
-      await loadPose(result.payload.pose, { loadId, taskId: payload.task_id, traceId });
-      if (sequence !== state.requestSequence) return;
-      emitStatus("playing", { phrase, words, taskId: payload.task_id });
-      postToParent("neotalk:playing", { phrase, words, taskId: payload.task_id, loadId, traceId });
-      return;
+      return { phrase, pose: result.payload.pose, words, taskId: payload.task_id, traceId: result.response.headers.get("X-NeoTalk-Trace-ID") };
     } catch (error) {
       if (error.status === 502 && transientFailures < 5) {
         transientFailures += 1;
@@ -437,6 +497,50 @@ async function requestSign(rawPhrase) {
     }
   }
   throw new Error("A tradução demorou mais que o esperado.");
+}
+
+async function prefetchSign(rawPhrase) {
+  const phrase = String(rawPhrase || "").replace(/\s+/g, " ").trim();
+  if (!phrase || phrase.length > 500) return;
+  const key = phraseKey(phrase);
+  if (state.prefetchedPoses.has(key) || state.prefetchTasks.has(key)) return;
+  const generation = state.prefetchGeneration;
+  const task = fetchSignPose(phrase, () => true, true);
+  state.prefetchTasks.set(key, task);
+  try {
+    const result = await task;
+    if (!result || generation !== state.prefetchGeneration) return;
+    state.prefetchedPoses.set(key, result);
+    while (state.prefetchedPoses.size > 2) state.prefetchedPoses.delete(state.prefetchedPoses.keys().next().value);
+    postToParent("neotalk:prefetch-ready", { ...result, loadId: nextPoseLoadId() });
+  } catch (error) {
+    if (generation === state.prefetchGeneration) postToParent("neotalk:prefetch-error", { phrase, message: error.message || "Pré-carregamento indisponível." });
+  } finally {
+    if (state.prefetchTasks.get(key) === task) state.prefetchTasks.delete(key);
+  }
+}
+
+async function requestSign(rawPhrase) {
+  const phrase = String(rawPhrase || "").replace(/\s+/g, " ").trim();
+  if (!phrase) throw new Error("A frase está vazia.");
+  if (phrase.length > 500) throw new Error("A frase excede o limite de 500 caracteres.");
+  const sequence = ++state.requestSequence;
+  clearError();
+  emitStatus("queued", { phrase });
+  const key = phraseKey(phrase);
+  let result = state.prefetchedPoses.get(key);
+  if (!result && state.prefetchTasks.has(key)) {
+    try { result = await state.prefetchTasks.get(key); } catch (_) { /* normal request below */ }
+  }
+  if (!result) result = await fetchSignPose(phrase, () => sequence === state.requestSequence);
+  if (!result || sequence !== state.requestSequence) return;
+  state.prefetchedPoses.delete(key);
+  const loadId = nextPoseLoadId();
+  postToParent("neotalk:pose-ready", { ...result, loadId });
+  await loadPose(result.pose, { loadId, taskId: result.taskId, traceId: result.traceId });
+  if (sequence !== state.requestSequence) return;
+  emitStatus("playing", { phrase, words: result.words, taskId: result.taskId });
+  postToParent("neotalk:playing", { phrase, words: result.words, taskId: result.taskId, loadId, traceId: result.traceId });
 }
 
 async function replayCachedPhrase(rawPhrase) {
@@ -472,6 +576,9 @@ async function runCommand(message) {
   switch (message.type) {
     case "neotalk:sign":
       await requestSign(message.phrase);
+      break;
+    case "neotalk:prefetch":
+      await prefetchSign(message.phrase);
       break;
     case "neotalk:replay":
       await replayCachedPhrase(message.phrase);
