@@ -38,6 +38,8 @@ const state = {
   poseFiles: new Map(),
   poseFileTasks: new Map(),
   poseFileBytes: 0,
+  presentation: null,
+  presentationGeneration: 0,
 };
 if (!state.zoom) state.zoom = defaults[state.avatar];
 
@@ -167,7 +169,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20261008-elia28");
+  url.searchParams.set("build", manifest.builtAtUtc || "20261008-elia29");
   return url.href;
 }
 
@@ -283,7 +285,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.10.08-elia.28",
+      productVersion: "2026.10.08-elia.29",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -318,9 +320,9 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.10.08-elia.28",
+    version: "2026.10.08-elia.29",
     avatars: [...supportedAvatars],
-    capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
+    capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "presentation-playlist", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
   });
 
   if (resumePose) await loadPose(resumePose);
@@ -337,6 +339,7 @@ async function loadPose(pose, options = {}) {
     taskId: options.taskId,
     poseId: new URL(url).pathname.split("/").at(-2) || "unknown",
     preview: options.preview === true,
+    presentationId: options.presentationId,
   };
   clearError();
   reportPoseStage("pose_available", context);
@@ -367,7 +370,8 @@ async function loadPose(pose, options = {}) {
     state.pendingPoseLoad = null;
   }
 
-  for (let attempt = 1; attempt <= maxPoseLoadAttempts; attempt += 1) {
+  const attempts = context.presentationId ? 1 : maxPoseLoadAttempts;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
     const startedAtWall = Date.now();
     reportPoseStage("load_sent", context, { attempt });
@@ -378,7 +382,7 @@ async function loadPose(pose, options = {}) {
           const error = new Error("O avatar não confirmou o carregamento da pose.");
           error.code = "pose_ack_timeout";
           reject(error);
-        }, poseAckTimeoutMs);
+        }, context.presentationId ? 300000 : poseAckTimeoutMs);
         state.pendingPoseLoad = { resolve, reject, timeout, loadId: context.loadId, attempt, url };
         sendUnity("LoadPoseUrl", state.poseFiles?.get(url)?.url || url);
       });
@@ -401,7 +405,7 @@ async function loadPose(pose, options = {}) {
         elapsedMs: Date.now() - startedAtWall,
         networkMs: poseNetworkTiming(url, startedAt),
       });
-      if (attempt === maxPoseLoadAttempts) {
+      if (attempt === attempts) {
         error.code = error.code || "pose_load_failed";
         error.loadId = context.loadId;
         error.correlationId = context.correlationId || context.loadId;
@@ -438,6 +442,18 @@ window.addEventListener("avatar3d-playback", (event) => {
       || detail.frame < 0 || detail.frameCount < 1 || detail.frame >= detail.frameCount) return;
   if (detail.status === "finished" && detail.frame !== detail.frameCount - 1) return;
   if (detail.status === "started" || detail.status === "progress" || detail.status === "finished") elements.loader.classList.add("hidden");
+  if (context.presentationId) {
+    const presentation = state.presentation;
+    if (!presentation || presentation.id !== context.presentationId) return;
+    if (!presentation.ready && ["started", "progress", "finished"].includes(detail.status)) {
+      sendUnity("PausePlayback");
+      presentation.ready = true;
+      clearTimeout(presentation.timeout);
+      postToParent("neotalk:presentation-ready", { playlistId: presentation.id, frameCount: detail.frameCount, sequences: presentation.sequences });
+    }
+    postToParent("neotalk:presentation-frame", { playlistId: presentation.id, status: detail.status, frame: detail.frame, frameCount: detail.frameCount, fps: detail.fps });
+    return;
+  }
   if (context.preview) {
     if (detail.status === "started" || detail.status === "progress" || detail.status === "finished") {
       sendUnity("PausePlayback");
@@ -606,8 +622,90 @@ async function playSharedPose(message) {
   postToParent("neotalk:playing", { phrase, words, shared: true, loadId: context.loadId, correlationId: context.correlationId, traceId: context.traceId });
 }
 
+function concatenatePresentationPoses(contents) {
+  let nextFrame = 0;
+  const output = contents.map(content => {
+    const ids = new Map();
+    const result = content.replace(/^# Frame: (.*?) - (.+ Keypoints)\s*$/gm, (_line, source, section) => {
+      if (!ids.has(source)) ids.set(source, nextFrame++);
+      return `# Frame: frame_${String(ids.get(source)).padStart(12, "0")}_keypoints.json - ${section}`;
+    });
+    if (!ids.size || !/ - Body Keypoints/.test(result)) throw new Error("Pose de demonstração inválida.");
+    if (nextFrame > 12000) throw new Error("A apresentação excede 12.000 frames. Reduza a lista de sequências.");
+    return result.trim();
+  });
+  if (!nextFrame) throw new Error("A apresentação não contém frames.");
+  return { content: output.join("\n\n") + "\n", frameCount: nextFrame };
+}
+
+function stopPresentation() {
+  state.presentationGeneration++;
+  state.presentation?.controller.abort();
+  const previous = state.presentation;
+  if (previous?.timeout) clearTimeout(previous.timeout);
+  state.presentation = null;
+  sendUnity("PausePlayback");
+  state.loop = false; sendUnity("SetLoop", "false");
+  if (previous?.url && state.poseFiles.has(previous.url) && state.pendingPoseLoad?.url !== previous.url) {
+    const file = state.poseFiles.get(previous.url);
+    URL.revokeObjectURL(file.url); state.poseFileBytes -= file.bytes; state.poseFiles.delete(previous.url);
+  }
+}
+
+async function preparePresentation(message) {
+  if (!state.nativePlayback) throw new Error("Atualize o WebGL para preparar apresentações.");
+  if (!Array.isArray(message.poses) || message.poses.length < 2 || message.poses.length > 64) throw new Error("Escolha de 2 a 64 sequências para a apresentação.");
+  const urls = message.poses.map(pose => resolvePoseUrl(pose.content_url));
+  if (typeof message.playlistId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(message.playlistId)) throw new Error("Identificador de apresentação inválido.");
+  stopPresentation();
+  const generation = state.presentationGeneration;
+  const controller = new AbortController();
+  const presentation = { id: message.playlistId, controller, ready: false, sequences: urls.length, url: null, timeout: null };
+  state.presentation = presentation;
+  presentation.timeout = window.setTimeout(() => {
+    if (state.presentation !== presentation || presentation.ready) return;
+    stopPresentation();
+    postToParent("neotalk:presentation-error", { playlistId: message.playlistId, message: "A preparação excedeu dez minutos. Desative e tente novamente com uma lista menor." });
+  }, 600000);
+  try {
+    const contents = new Array(urls.length); let cursor = 0, bytes = 0;
+    const worker = async () => {
+      while (cursor < urls.length) {
+        const index = cursor++;
+        const cached = state.poseFiles.get(urls[index]);
+        const response = await fetch(cached?.url || urls[index], { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
+        if (!response.ok) throw new Error(`Falha ao preparar apresentação (${response.status}).`);
+        const text = await response.text();
+        bytes += new Blob([text]).size;
+        if (bytes > 64 * 1024 * 1024) throw new Error("A apresentação excede o limite de 64 MB.");
+        contents[index] = text;
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    if (generation !== state.presentationGeneration) return;
+    const combined = concatenatePresentationPoses(contents);
+    const blob = new Blob([combined.content], { type: "text/plain" });
+    const url = new URL(`/presentation/${message.playlistId}.pose`, window.location.origin).href;
+    presentation.url = url;
+    state.poseFiles.set(url, { url: URL.createObjectURL(blob), bytes: blob.size }); state.poseFileBytes += blob.size;
+    state.loop = true;
+    await loadPose({ content_url: url, fps: 30, frame_count: combined.frameCount }, { presentationId: presentation.id });
+    // Readiness is emitted only on the real first native frame, not this ACK.
+  } catch (error) {
+    if (generation !== state.presentationGeneration) return;
+    stopPresentation();
+    postToParent("neotalk:presentation-error", { playlistId: message.playlistId, message: error.message || "Falha ao preparar demonstração." });
+  }
+}
+
 async function runCommand(message) {
   switch (message.type) {
+    case "neotalk:prepare-presentation":
+      await preparePresentation(message);
+      break;
+    case "neotalk:stop-presentation":
+      stopPresentation();
+      break;
     case "neotalk:sign":
       await requestSign(message.phrase);
       break;
