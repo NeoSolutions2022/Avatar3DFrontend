@@ -6,7 +6,9 @@
     "dataUrl": "Build/elia.data",
     "frameworkUrl": "Build/elia.framework.js",
     "codeUrl": "Build/elia.wasm",
-    "buildBytes": "147480390",
     "unityVersion": "6000.2.2f1",
-    "builtAtUtc": "2026-10-07T13:31:14.4548995Z"
+    "builtAtUtc": "2026-10-08T03:17:38.5442127Z",
+    "capabilities": [
+        "native-playback-progress"
+    ]
 }

@@ -35,6 +35,9 @@ const state = {
   prefetchGeneration: 0,
   nativePlayback: false,
   playbackContext: null,
+  poseFiles: new Map(),
+  poseFileTasks: new Map(),
+  poseFileBytes: 0,
 };
 if (!state.zoom) state.zoom = defaults[state.avatar];
 
@@ -164,7 +167,7 @@ function sendUnity(method, value) {
 
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20261007-elia27");
+  url.searchParams.set("build", manifest.builtAtUtc || "20261008-elia28");
   return url.href;
 }
 
@@ -280,7 +283,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.10.07-elia.27",
+      productVersion: "2026.10.08-elia.28",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -315,9 +318,9 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.10.07-elia.27",
+    version: "2026.10.08-elia.28",
     avatars: [...supportedAvatars],
-    capabilities: ["sign", "replay", "shared-pose", "prefetch", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
+    capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
   });
 
   if (resumePose) await loadPose(resumePose);
@@ -376,8 +379,8 @@ async function loadPose(pose, options = {}) {
           error.code = "pose_ack_timeout";
           reject(error);
         }, poseAckTimeoutMs);
-        state.pendingPoseLoad = { resolve, reject, timeout, loadId: context.loadId, attempt };
-        sendUnity("LoadPoseUrl", url);
+        state.pendingPoseLoad = { resolve, reject, timeout, loadId: context.loadId, attempt, url };
+        sendUnity("LoadPoseUrl", state.poseFiles?.get(url)?.url || url);
       });
       reportPoseStage("unity_ack", context, { attempt, elapsedMs: Date.now() - startedAtWall, networkMs: poseNetworkTiming(url, startedAt), acknowledgedPoseId: false });
       state.activePose = pose;
@@ -499,6 +502,34 @@ async function fetchSignPose(phrase, isCurrent = () => true, quiet = false) {
   throw new Error("A tradução demorou mais que o esperado.");
 }
 
+// Fetch the actual immutable content during the preceding clip. API task
+// readiness alone does not eliminate the download at the playback handoff.
+// Blob URLs are instance-local; the original URL remains the pose identity.
+async function prefetchPoseFile(pose) {
+  const url = resolvePoseUrl(pose.content_url);
+  if (state.poseFiles.has(url)) return;
+  if (state.poseFileTasks.has(url)) return state.poseFileTasks.get(url);
+  if (state.poseFileTasks.size >= 2) return;
+  const task = (async () => {
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new Error(`Pose download ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.size || blob.size > 16 * 1024 * 1024) return;
+    while (state.poseFiles.size >= 4 || state.poseFileBytes + blob.size > 32 * 1024 * 1024) {
+      const key = [...state.poseFiles.keys()].find(key => key !== state.pendingPoseLoad?.url);
+      if (!key) return;
+      const previous = state.poseFiles.get(key);
+      URL.revokeObjectURL(previous.url);
+      state.poseFileBytes -= previous.bytes;
+      state.poseFiles.delete(key);
+    }
+    state.poseFiles.set(url, { url: URL.createObjectURL(blob), bytes: blob.size });
+    state.poseFileBytes += blob.size;
+  })();
+  state.poseFileTasks.set(url, task);
+  try { await task; } finally { state.poseFileTasks.delete(url); }
+}
+
 async function prefetchSign(rawPhrase) {
   const phrase = String(rawPhrase || "").replace(/\s+/g, " ").trim();
   if (!phrase || phrase.length > 500) return;
@@ -510,6 +541,9 @@ async function prefetchSign(rawPhrase) {
   try {
     const result = await task;
     if (!result || generation !== state.prefetchGeneration) return;
+    // A failed warm download never prevents the normal URL load/retry path.
+    try { await prefetchPoseFile(result.pose); } catch (_) { /* load on demand */ }
+    if (generation !== state.prefetchGeneration) return;
     state.prefetchedPoses.set(key, result);
     while (state.prefetchedPoses.size > 2) state.prefetchedPoses.delete(state.prefetchedPoses.keys().next().value);
     postToParent("neotalk:prefetch-ready", { ...result, loadId: nextPoseLoadId() });
@@ -579,6 +613,9 @@ async function runCommand(message) {
       break;
     case "neotalk:prefetch":
       await prefetchSign(message.phrase);
+      break;
+    case "neotalk:prefetch-pose":
+      try { await prefetchPoseFile(message.pose); } catch (_) { /* optional warmup */ }
       break;
     case "neotalk:replay":
       await replayCachedPhrase(message.phrase);
