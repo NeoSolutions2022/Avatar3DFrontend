@@ -201,9 +201,11 @@ class PoseApiTests(unittest.TestCase):
         )
         self.assertEqual(created.status_code, 202, created.text)
         self.assertEqual(created.json()["task_id"], task_id)
+        self.assertGreaterEqual(created.json()["timings_ms"]["upstream_submit_ms"], 0)
 
         pending = self.client.get(f"/api/v1/mvp/tasks/{task_id}")
         self.assertEqual(pending.status_code, 202, pending.text)
+        self.assertEqual(set(pending.json()["timings_ms"]), {"upstream_status_ms"})
 
         ready = self.client.get(f"/api/v1/mvp/tasks/{task_id}")
         self.assertEqual(ready.status_code, 200, ready.text)
@@ -211,6 +213,16 @@ class PoseApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ready")
         self.assertEqual(payload["palavras_encontradas"], ["cadeira.pose"])
         self.assertIn("/content", payload["pose"]["content_url"])
+        self.assertFalse(payload["pose_cache_hit"])
+        self.assertEqual(set(payload["timings_ms"]), {"upstream_status_ms", "storage_lookup_ms", "download_ms", "validation_persist_ms"})
+        self.assertTrue(all(value >= 0 for value in payload["timings_ms"].values()))
+        task_status.side_effect = None
+        task_status.return_value = NeoTalkResponse(200, {"palavras_encontradas": ["cadeira.pose"]})
+        cached = self.client.get(f"/api/v1/mvp/tasks/{task_id}").json()
+        self.assertTrue(cached["pose_cache_hit"])
+        self.assertNotIn("download_ms", cached["timings_ms"])
+        self.assertNotIn("validation_persist_ms", cached["timings_ms"])
+        download_pose.assert_called_once()
 
     @patch("app.main.neotalk_client.submit_phrase")
     def test_pose_error_identifies_stage_and_upstream_status(self, submit_phrase) -> None:
