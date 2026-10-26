@@ -285,7 +285,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.10.08-elia.29",
+      productVersion: "2026.10.26-elia.30",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -320,7 +320,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.10.08-elia.29",
+    version: "2026.10.26-elia.30",
     avatars: [...supportedAvatars],
     capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "presentation-playlist", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
   });
@@ -572,15 +572,24 @@ async function prefetchSign(rawPhrase) {
   if (!phrase || phrase.length > 500) return;
   const key = phraseKey(phrase);
   if (state.prefetchedPoses.has(key) || state.prefetchTasks.has(key)) return;
+  if (state.prefetchTasks.size >= 2) {
+    postToParent("neotalk:prefetch-error", { phrase, code: "prefetch_busy", message: "Pré-carregamento ocupado; reprodução sob demanda disponível." });
+    return;
+  }
   const generation = state.prefetchGeneration;
-  const task = fetchSignPose(phrase, () => true, true);
+  // The shared promise covers both the service lookup and the immutable file.
+  // A sign arriving during warmup must not race a second URL download in Unity.
+  const task = (async () => {
+    const result = await fetchSignPose(phrase, () => generation === state.prefetchGeneration, true);
+    if (!result || generation !== state.prefetchGeneration) return null;
+    // Failure remains optional: normal URL playback is still the fallback.
+    try { await prefetchPoseFile(result.pose); } catch (_) { /* load on demand */ }
+    return generation === state.prefetchGeneration ? result : null;
+  })();
   state.prefetchTasks.set(key, task);
   try {
     const result = await task;
     if (!result || generation !== state.prefetchGeneration) return;
-    // A failed warm download never prevents the normal URL load/retry path.
-    try { await prefetchPoseFile(result.pose); } catch (_) { /* load on demand */ }
-    if (generation !== state.prefetchGeneration) return;
     state.prefetchedPoses.set(key, result);
     while (state.prefetchedPoses.size > 2) state.prefetchedPoses.delete(state.prefetchedPoses.keys().next().value);
     postToParent("neotalk:prefetch-ready", { ...result, loadId: nextPoseLoadId() });
