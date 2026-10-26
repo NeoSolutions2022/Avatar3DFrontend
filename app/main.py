@@ -6,6 +6,7 @@ import secrets
 import time
 from uuid import uuid4
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,9 +21,16 @@ from .pose_format import PoseValidationError, validate_pose
 from .storage import PoseRecord, PoseStorage
 
 
+@asynccontextmanager
+async def outbound_lifespan(_app: FastAPI):
+    with neotalk_client.lifespan():
+        yield
+
+
 app = FastAPI(
     title="Avatar3D Pose API",
     version="2.1.0",
+    lifespan=outbound_lifespan,
     description=(
         "Validates 2D or 3D .pose data without changing its coordinates and "
         "exposes the original payload to the Unity WebGL players."
@@ -171,7 +179,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "api_version": "2.1.0",
-        "app_version": "2026.10.08-elia.29",
+        "app_version": "2026.10.26-elia.30",
         "pose_pipeline": "original-payload-pass-through",
         "webgl_ready": webgl_ready,
         "avatars": ready_avatars,
@@ -187,7 +195,7 @@ def widget_config() -> JSONResponse:
             "avatars": ["asuna", "lia", "elia"],
             "default_avatar": "lia",
             "max_phrase_length": 500,
-            "app_version": "2026.10.08-elia.29",
+            "app_version": "2026.10.26-elia.30",
         },
         headers={"Cache-Control": "no-store"},
     )

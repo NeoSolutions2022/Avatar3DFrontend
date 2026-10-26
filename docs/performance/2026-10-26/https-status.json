@@ -1,0 +1,170 @@
+{
+  "kind": "real-https-same-completed-task-transport-comparison",
+  "startedAt": "2026-10-26T17:11:05.056171+00:00",
+  "roundsPerVariant": 6,
+  "callsPerRound": 3,
+  "samples": [
+    {
+      "round": 1,
+      "variant": "urllib",
+      "totalMs": 1502.5879000004352,
+      "requestMs": [
+        501.6678000001775,
+        502.35979999979463,
+        498.4497999994346
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "pool",
+      "totalMs": 820.0709000002462,
+      "requestMs": [
+        487.51199999969685,
+        163.5153999995964,
+        163.14280000005965
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "pool",
+      "totalMs": 835.4953999996724,
+      "requestMs": [
+        504.2978999999832,
+        162.87540000030276,
+        162.23080000054324
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "urllib",
+      "totalMs": 1497.9148999991594,
+      "requestMs": [
+        496.3883000000351,
+        502.10229999993317,
+        499.29729999985284
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "urllib",
+      "totalMs": 1494.1671000005954,
+      "requestMs": [
+        487.060599999495,
+        496.9549999996161,
+        510.05350000014005
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "pool",
+      "totalMs": 820.0445000002219,
+      "requestMs": [
+        487.99349999990227,
+        163.46679999969638,
+        162.49549999974988
+      ]
+    },
+    {
+      "round": 4,
+      "variant": "pool",
+      "totalMs": 841.1132000001089,
+      "requestMs": [
+        505.8198999995511,
+        163.952199999585,
+        164.84289999971224
+      ]
+    },
+    {
+      "round": 4,
+      "variant": "urllib",
+      "totalMs": 1495.1178000001164,
+      "requestMs": [
+        490.84709999988263,
+        516.8416999995316,
+        487.256399999751
+      ]
+    },
+    {
+      "round": 5,
+      "variant": "urllib",
+      "totalMs": 1508.9791999998852,
+      "requestMs": [
+        497.03950000002806,
+        487.26709999937157,
+        524.5826000000307
+      ]
+    },
+    {
+      "round": 5,
+      "variant": "pool",
+      "totalMs": 821.8312999997579,
+      "requestMs": [
+        488.61350000061066,
+        163.19560000010824,
+        163.35530000014842
+      ]
+    },
+    {
+      "round": 6,
+      "variant": "pool",
+      "totalMs": 810.847400000057,
+      "requestMs": [
+        481.21869999977207,
+        162.54990000015823,
+        160.88270000000193
+      ]
+    },
+    {
+      "round": 6,
+      "variant": "urllib",
+      "totalMs": 1514.277299999776,
+      "requestMs": [
+        488.7423000000126,
+        510.62439999986964,
+        514.6380000005593
+      ]
+    }
+  ],
+  "equivalentResponses": true,
+  "limitations": [
+    "One synthetic completed task, not representative of all workers/endpoints.",
+    "Transport implementation comparison, not full old/new release A/B.",
+    "No Unity, GPT, acoustic ASR, live room, first-frame or fluency approval.",
+    "Pool creation/close included in round time; request distribution excludes client initialization.",
+    "Sequential same-host workload; no invented TLS/worker substage timings."
+  ],
+  "summary": {
+    "urllib": {
+      "roundMs": {
+        "count": 6,
+        "mean": 1502.174033333328,
+        "p50": 1497.9148999991594,
+        "p95": 1514.277299999776,
+        "max": 1514.277299999776
+      },
+      "requestMs": {
+        "count": 18,
+        "mean": 500.67630555541757,
+        "p50": 498.4497999994346,
+        "p95": 524.5826000000307,
+        "max": 524.5826000000307
+      }
+    },
+    "pool": {
+      "roundMs": {
+        "count": 6,
+        "mean": 824.9004500000107,
+        "p50": 820.0709000002462,
+        "p95": 841.1132000001089,
+        "max": 841.1132000001089
+      },
+      "requestMs": {
+        "count": 18,
+        "mean": 272.8867111110655,
+        "p50": 163.46679999969638,
+        "p95": 505.8198999995511,
+        "max": 505.8198999995511
+      }
+    }
+  }
+}

@@ -5,7 +5,9 @@ data/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+/outputs/
 *.log
 *.png
+!docs/performance/**/*.png
 !frontend/assets/*.png
 !webgl/*/TemplateData/*.png

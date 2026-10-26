@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-26 — Pool HTTPS do proxy (candidata)
+
+- Cliente HTTP limitado e gerenciado pelo lifespan também no proxy do avatar;
+  autenticação por chamada, sem cookies persistidos nem chave nos downloads.
+- Limites de resposta/arquivo, encerramento, redirects e erros por etapa cobertos.
+- HTTPS real ao mesmo resultado concluído: seis rodadas por variante/três
+  consultas, média por rodada 1.502,17→824,90 ms, sem latência artificial.
+  Ganho restrito ao transporte, não 45% de ganho da Elia ou da sala.
+- 32 Python + 28 Node passaram; dez lotes/70 palavras completos com dois Unity
+  reais/PiP nativo, ASR controlado, sem reset/pausa/rejeição. Fluidez ainda pendente.
+- Sem novo WebGL, mudança de sinais/mãos/cenas, merge ou deploy de produção.
+- [Dados, gráfico e limites](docs/performance/2026-10-26/README.md).
+
 ## 2026-10-26 — Widget 2026.10.26-elia.30 (candidata)
 
 - Prefetch compartilha a consulta e o download do arquivo até a prontidão real
