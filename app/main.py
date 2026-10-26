@@ -6,6 +6,7 @@ import secrets
 import time
 from uuid import uuid4
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,9 +21,16 @@ from .pose_format import PoseValidationError, validate_pose
 from .storage import PoseRecord, PoseStorage
 
 
+@asynccontextmanager
+async def outbound_lifespan(_app: FastAPI):
+    with neotalk_client.lifespan():
+        yield
+
+
 app = FastAPI(
     title="Avatar3D Pose API",
     version="2.1.0",
+    lifespan=outbound_lifespan,
     description=(
         "Validates 2D or 3D .pose data without changing its coordinates and "
         "exposes the original payload to the Unity WebGL players."
@@ -171,7 +179,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "api_version": "2.1.0",
-        "app_version": "2026.10.08-elia.29",
+        "app_version": "2026.10.26-elia.30",
         "pose_pipeline": "original-payload-pass-through",
         "webgl_ready": webgl_ready,
         "avatars": ready_avatars,
@@ -187,7 +195,7 @@ def widget_config() -> JSONResponse:
             "avatars": ["asuna", "lia", "elia"],
             "default_avatar": "lia",
             "max_phrase_length": 500,
-            "app_version": "2026.10.08-elia.29",
+            "app_version": "2026.10.26-elia.30",
         },
         headers={"Cache-Control": "no-store"},
     )
@@ -198,6 +206,7 @@ def mvp_sign(payload: MvpSignRequest) -> JSONResponse:
     phrase = " ".join(payload.phrase.split())
     if not phrase:
         raise HTTPException(status_code=422, detail="phrase is empty")
+    upstream_started = time.perf_counter()
     try:
         upstream = neotalk_client.submit_phrase(phrase)
     except NeoTalkApiError as exception:
@@ -208,21 +217,25 @@ def mvp_sign(payload: MvpSignRequest) -> JSONResponse:
         raise HTTPException(status_code=502, detail="pose API did not return a task id", headers={"X-NeoTalk-Failure-Stage": "submit"})
     return JSONResponse(
         status_code=202,
-        content={"status": "queued", "task_id": task_id, "phrase": phrase},
+        content={"status": "queued", "task_id": task_id, "phrase": phrase,
+                 "timings_ms": {"upstream_submit_ms": (time.perf_counter() - upstream_started) * 1000}},
     )
 
 
 @app.get("/api/v1/mvp/tasks/{task_id}", response_model=None)
 def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
+    timings = {}
+    upstream_started = time.perf_counter()
     try:
         upstream = neotalk_client.task_status(task_id)
     except NeoTalkApiError as exception:
         raise mvp_error(exception) from exception
 
+    timings["upstream_status_ms"] = (time.perf_counter() - upstream_started) * 1000
     if upstream.status_code == 202:
         return JSONResponse(
             status_code=202,
-            content={"status": "processing", "task_id": task_id},
+            content={"status": "processing", "task_id": task_id, "timings_ms": timings},
         )
 
     words = upstream.payload.get("palavras_encontradas", [])
@@ -231,6 +244,7 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
     words = [str(word) for word in words]
 
     pose_name = f"mvp-{task_id}.pose"
+    lookup_started = time.perf_counter()
     record = storage.get_by_name(pose_name)
     if (
         record is not None
@@ -240,6 +254,8 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
         # Nunca reutilize uma copia historica transformada se o payload original
         # nao existe mais; baixe novamente a fonte autoritativa.
         record = None
+    timings["storage_lookup_ms"] = (time.perf_counter() - lookup_started) * 1000
+    cache_hit = record is not None
     if record is None:
         file_url = upstream.payload.get("file_url")
         if not isinstance(file_url, str) or not file_url:
@@ -249,6 +265,7 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
         try:
             download_started = time.perf_counter()
             raw = neotalk_client.download_pose(file_url)
+            timings["download_ms"] = (time.perf_counter() - download_started) * 1000
             logging.getLogger("uvicorn.error").info(
                 "pose_pipeline trace_id=%s stage=download status=200 elapsed_ms=%s",
                 request.state.pose_trace_id,
@@ -260,6 +277,7 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
                 fps=settings.mvp_pose_fps,
                 raw=raw,
             )
+            timings["validation_persist_ms"] = (time.perf_counter() - validation_started) * 1000
             logging.getLogger("uvicorn.error").info(
                 "pose_pipeline trace_id=%s stage=validation status=200 elapsed_ms=%s",
                 request.state.pose_trace_id,
@@ -279,6 +297,8 @@ def mvp_task_status(task_id: str, request: Request) -> JSONResponse | dict:
         "task_id": task_id,
         "palavras_encontradas": words,
         "pose": record_response(record, request),
+        "pose_cache_hit": cache_hit,
+        "timings_ms": timings,
     }
 
 

@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import json
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
-from urllib.error import HTTPError, URLError
+from http.cookiejar import CookieJar, DefaultCookiePolicy
+from threading import Lock
 from urllib.parse import quote, urlencode, urlparse
-from urllib.request import Request, urlopen
+
+import httpx
 
 from .config import Settings
 
 
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9-]{1,100}$")
+
+
+class _NoProviderCookies(DefaultCookiePolicy):
+    def set_ok(self, cookie, request):
+        return False
 
 
 class NeoTalkApiError(RuntimeError):
@@ -31,6 +39,51 @@ class NeoTalkResponse:
 class NeoTalkClient:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._http: httpx.Client | None = None
+        self._lifespan_active = False
+        self._lifecycle_lock = Lock()
+
+    def _new_http_client(self) -> httpx.Client:
+        return httpx.Client(
+            timeout=httpx.Timeout(self.settings.neotalk_api_timeout_seconds, pool=5.0),
+            limits=httpx.Limits(max_connections=8, max_keepalive_connections=4, keepalive_expiry=30),
+            cookies=CookieJar(policy=_NoProviderCookies()),
+            headers={"Accept-Encoding": "identity"},
+        )
+
+    @contextmanager
+    def lifespan(self):
+        # Reserve ownership before constructing the transport (which may fail).
+        with self._lifecycle_lock:
+            if self._lifespan_active:
+                raise RuntimeError("NeoTalk HTTP lifespan is already active")
+            self._lifespan_active = True
+        try:
+            with self._new_http_client() as client:
+                self._http = client
+                yield
+        finally:
+            self._http = None
+            with self._lifecycle_lock:
+                self._lifespan_active = False
+
+    @contextmanager
+    def _transport(self):
+        if self._http is not None:
+            yield self._http
+        else:
+            # CLI/direct tests without ASGI startup still release their resources.
+            with self._new_http_client() as client:
+                yield client
+
+    @staticmethod
+    def _read_bounded(response: httpx.Response, limit: int) -> bytes:
+        raw = bytearray()
+        for chunk in response.iter_bytes(chunk_size=65536):
+            raw.extend(chunk[:max(0, limit + 1 - len(raw))])
+            if len(raw) > limit:
+                break
+        return bytes(raw)
 
     @property
     def configured(self) -> bool:
@@ -51,19 +104,32 @@ class NeoTalkClient:
         return self._json_request(f"/task-status-pose/{quote(task_id)}")
 
     def download_pose(self, file_url: str) -> bytes:
-        parsed = urlparse(file_url)
-        if parsed.scheme != "https" or not parsed.netloc:
-            raise NeoTalkApiError("pose service returned an invalid file URL", stage="download")
-
-        request = Request(file_url, headers={"Accept": "text/plain"})
         try:
-            with urlopen(request, timeout=self.settings.neotalk_api_timeout_seconds) as response:
-                raw = response.read(self.settings.max_pose_bytes + 1)
-        except HTTPError as exception:
-            raise NeoTalkApiError(
-                f"pose file is unavailable (HTTP {exception.code})", stage="download", upstream_status=exception.code
-            ) from exception
-        except (TimeoutError, URLError) as exception:
+            with self._transport() as client:
+                for _ in range(6):
+                    try:
+                        parsed = urlparse(file_url)
+                        port = parsed.port  # Reject malformed ports before opening a connection.
+                        valid = parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and (port is None or port > 0)
+                    except ValueError:
+                        valid = False
+                    if not valid:
+                        raise NeoTalkApiError("pose service returned an invalid file URL", stage="download")
+                    with client.stream("GET", file_url, headers={"Accept": "text/plain"}, follow_redirects=False) as response:
+                        if response.is_redirect and response.headers.get("location"):
+                            # Recheck TLS/credentials on every hop, including relative redirects.
+                            file_url = str(response.url.join(response.headers["location"]))
+                            continue
+                        if response.status_code >= 300:
+                            raise NeoTalkApiError(
+                                f"pose file is unavailable (HTTP {response.status_code})",
+                                stage="download", upstream_status=response.status_code,
+                            )
+                        raw = self._read_bounded(response, self.settings.max_pose_bytes)
+                        break
+                else:
+                    raise NeoTalkApiError("pose file exceeded redirect limit", stage="download")
+        except (httpx.HTTPError, httpx.InvalidURL) as exception:
             raise NeoTalkApiError("could not download the generated pose", stage="download") from exception
 
         if len(raw) > self.settings.max_pose_bytes:
@@ -92,16 +158,17 @@ class NeoTalkClient:
             headers["Content-Type"] = content_type
 
         url = self.settings.neotalk_api_base_url.rstrip("/") + path
-        request = Request(url, data=body, headers=headers, method=method)
         try:
-            with urlopen(request, timeout=self.settings.neotalk_api_timeout_seconds) as response:
-                status_code = response.status
-                raw = response.read(1_048_577)
-        except HTTPError as exception:
-            raw = exception.read(1_048_577)
-            detail = self._error_detail(raw, exception.code)
-            raise NeoTalkApiError(detail, stage=stage, upstream_status=exception.code) from exception
-        except (TimeoutError, URLError) as exception:
+            # Never put the API key on the shared transport or on file downloads.
+            # API redirects are refused rather than forwarding credentials elsewhere.
+            with self._transport() as client, client.stream(
+                method, url, content=body, headers=headers, follow_redirects=False
+            ) as response:
+                status_code = response.status_code
+                raw = self._read_bounded(response, 1_048_576)
+                if status_code >= 300:
+                    raise NeoTalkApiError(self._error_detail(raw, status_code), stage=stage, upstream_status=status_code)
+        except (httpx.HTTPError, httpx.InvalidURL) as exception:
             raise NeoTalkApiError("NeoTalk pose API is unavailable", stage=stage) from exception
 
         if len(raw) > 1_048_576:

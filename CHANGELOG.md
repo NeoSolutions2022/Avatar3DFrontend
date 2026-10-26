@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-10-26 — Pool HTTPS do proxy (candidata)
+
+- Cliente HTTP limitado e gerenciado pelo lifespan também no proxy do avatar;
+  autenticação por chamada, sem cookies persistidos nem chave nos downloads.
+- Limites de resposta/arquivo, encerramento, redirects e erros por etapa cobertos.
+- HTTPS real ao mesmo resultado concluído: seis rodadas por variante/três
+  consultas, média por rodada 1.502,17→824,90 ms, sem latência artificial.
+  Ganho restrito ao transporte, não 45% de ganho da Elia ou da sala.
+- 32 Python + 28 Node passaram; dez lotes/70 palavras completos com dois Unity
+  reais/PiP nativo, ASR controlado, sem reset/pausa/rejeição. Fluidez ainda pendente.
+- Sem novo WebGL, mudança de sinais/mãos/cenas, merge ou deploy de produção.
+- [Dados, gráfico e limites](docs/performance/2026-10-26/README.md).
+
+## 2026-10-26 — Widget 2026.10.26-elia.30 (candidata)
+
+- Prefetch compartilha a consulta e o download do arquivo até a prontidão real
+  dos bytes; um `sign` concorrente não inicia outra transferência para Unity.
+- No máximo dois trabalhos antecipados por geração do widget; excesso de
+  warmup é não bloqueante e a reprodução sob demanda continua disponível.
+- Geração invalidada deixa de ser elegível para cache/publicação após troca
+  de avatar. Erro de download mantém o caminho normal de carregamento.
+- 28 testes Node passaram, incluindo sete novos de corrida, burst, 502,
+  cancelamento e HTTP loopback real. Nenhum WebGL/pose/mãos alterado.
+- Ensaio local com cinco lotes e dois Unity reais passou; não demonstra ganho
+  ponta a ponta. Metodologia e limites: docs/WIDGET-PREFETCH-RACE-2026-10-26.md.
+
 ## 2026-10-08 — Widget 2026.10.08-elia.29
 
 - Nova capacidade `presentation-playlist`: prepara uma sequência longa a partir

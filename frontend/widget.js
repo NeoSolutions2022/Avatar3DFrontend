@@ -285,7 +285,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.10.08-elia.29",
+      productVersion: "2026.10.26-elia.30",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -320,7 +320,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.10.08-elia.29",
+    version: "2026.10.26-elia.30",
     avatars: [...supportedAvatars],
     capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "presentation-playlist", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
   });
@@ -473,10 +473,25 @@ window.addEventListener("avatar3d-playback", (event) => {
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function fetchSignPose(phrase, isCurrent = () => true, quiet = false) {
+  const clock = () => typeof performance !== "undefined" ? performance.now() : Date.now();
+  const started = clock();
+  const timingsMs = { total_ms: 0, submit_request_ms: 0, poll_request_ms: 0, poll_wait_ms: 0, retry_wait_ms: 0 };
+  const observeServer = result => {
+    const source = result.payload.timings_ms || {};
+    for (const key of ["upstream_submit_ms", "upstream_status_ms", "download_ms", "validation_persist_ms", "storage_lookup_ms"]) {
+      if (typeof source[key] === "number" && Number.isFinite(source[key]) && source[key] >= 0)
+        timingsMs[`proxy_${key}`] = (timingsMs[`proxy_${key}`] || 0) + source[key];
+    }
+  };
+  const timedApi = async (key, ...args) => {
+    const at = clock();
+    try { const result = await api(...args); observeServer(result); return result; }
+    finally { timingsMs[key] += clock() - at; }
+  };
   let payload;
   for (let attempt = 0; ; attempt += 1) {
     try {
-      ({ payload } = await api("/api/v1/mvp/sign", {
+      ({ payload } = await timedApi("submit_request_ms", "/api/v1/mvp/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phrase }),
@@ -486,17 +501,21 @@ async function fetchSignPose(phrase, isCurrent = () => true, quiet = false) {
       const transient = [408, 429, 500, 502, 503, 504].includes(error.status);
       if (!transient || attempt >= 2 || !isCurrent()) throw error;
       if (!quiet) emitStatus("processing", { phrase, recovering: true });
+      const waitingAt = clock();
       await wait(350 * (attempt + 1));
+      timingsMs.retry_wait_ms += clock() - waitingAt;
     }
   }
 
   let transientFailures = 0;
   for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
     const delayMs = pollDelayForAttempt(attempt);
+    const waitingAt = clock();
     if (delayMs > 0) await wait(delayMs);
+    timingsMs.poll_wait_ms += clock() - waitingAt;
     if (!isCurrent()) return null;
     try {
-      const result = await api(`/api/v1/mvp/tasks/${encodeURIComponent(payload.task_id)}`);
+      const result = await timedApi("poll_request_ms", `/api/v1/mvp/tasks/${encodeURIComponent(payload.task_id)}`);
       if (result.response.status === 202) {
         if (!quiet) emitStatus("processing", { phrase, taskId: payload.task_id });
         continue;
@@ -506,7 +525,9 @@ async function fetchSignPose(phrase, isCurrent = () => true, quiet = false) {
         : [];
       if (!isCurrent()) return null;
       cachePose(phrase, result.payload.pose, words);
-      return { phrase, pose: result.payload.pose, words, taskId: payload.task_id, traceId: result.response.headers.get("X-NeoTalk-Trace-ID") };
+      timingsMs.total_ms = clock() - started;
+      return { phrase, pose: result.payload.pose, words, taskId: payload.task_id, traceId: result.response.headers.get("X-NeoTalk-Trace-ID"),
+        timingsMs, poseCacheHit: typeof result.payload.pose_cache_hit === "boolean" ? result.payload.pose_cache_hit : undefined };
     } catch (error) {
       if (error.status === 502 && transientFailures < 5) {
         transientFailures += 1;
@@ -551,15 +572,24 @@ async function prefetchSign(rawPhrase) {
   if (!phrase || phrase.length > 500) return;
   const key = phraseKey(phrase);
   if (state.prefetchedPoses.has(key) || state.prefetchTasks.has(key)) return;
+  if (state.prefetchTasks.size >= 2) {
+    postToParent("neotalk:prefetch-error", { phrase, code: "prefetch_busy", message: "Pré-carregamento ocupado; reprodução sob demanda disponível." });
+    return;
+  }
   const generation = state.prefetchGeneration;
-  const task = fetchSignPose(phrase, () => true, true);
+  // The shared promise covers both the service lookup and the immutable file.
+  // A sign arriving during warmup must not race a second URL download in Unity.
+  const task = (async () => {
+    const result = await fetchSignPose(phrase, () => generation === state.prefetchGeneration, true);
+    if (!result || generation !== state.prefetchGeneration) return null;
+    // Failure remains optional: normal URL playback is still the fallback.
+    try { await prefetchPoseFile(result.pose); } catch (_) { /* load on demand */ }
+    return generation === state.prefetchGeneration ? result : null;
+  })();
   state.prefetchTasks.set(key, task);
   try {
     const result = await task;
     if (!result || generation !== state.prefetchGeneration) return;
-    // A failed warm download never prevents the normal URL load/retry path.
-    try { await prefetchPoseFile(result.pose); } catch (_) { /* load on demand */ }
-    if (generation !== state.prefetchGeneration) return;
     state.prefetchedPoses.set(key, result);
     while (state.prefetchedPoses.size > 2) state.prefetchedPoses.delete(state.prefetchedPoses.keys().next().value);
     postToParent("neotalk:prefetch-ready", { ...result, loadId: nextPoseLoadId() });
