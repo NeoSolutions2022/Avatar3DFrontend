@@ -6,7 +6,7 @@
     "dataUrl": "Build/elia.data",
     "frameworkUrl": "Build/elia.framework.js",
     "codeUrl": "Build/elia.wasm",
-    "buildBytes": "147531724",
+    "buildBytes": "147532602",
     "unityVersion": "6000.2.2f1",
-    "builtAtUtc": "2026-10-29T18:03:39.9651401Z"
+    "builtAtUtc": "2026-10-29T18:50:50.2089412Z"
 }
