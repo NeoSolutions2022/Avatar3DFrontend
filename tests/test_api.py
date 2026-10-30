@@ -58,7 +58,7 @@ class PoseApiTests(unittest.TestCase):
         health = self.client.get("/api/v1/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["status"], "ok")
-        self.assertEqual(health.json()["app_version"], "2026.10.29-elia.34")
+        self.assertEqual(health.json()["app_version"], "2026.10.30-elia.35")
         self.assertEqual(
             health.json()["pose_pipeline"], "original-payload-pass-through"
         )
@@ -119,14 +119,14 @@ class PoseApiTests(unittest.TestCase):
         response = self.client.get("/mvp")
         self.assertEqual(response.status_code, 200)
         self.assertIn("NeoTalk Chat", response.text)
-        self.assertIn("v2026.10.29-elia.34", response.text)
+        self.assertIn("v2026.10.30-elia.35", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_widget_page_and_public_config_are_available(self) -> None:
         response = self.client.get("/widget")
         self.assertEqual(response.status_code, 200)
         self.assertIn("NeoTalk Avatar Widget", response.text)
-        self.assertIn("v2026.10.29-elia.34", response.text)
+        self.assertIn("v2026.10.30-elia.35", response.text)
         self.assertEqual(
             response.headers["content-security-policy"],
             "frame-ancestors https://portal.example http://localhost:3000",
@@ -134,6 +134,8 @@ class PoseApiTests(unittest.TestCase):
 
         config = self.client.get("/api/v1/widget/config")
         self.assertEqual(config.status_code, 200)
+        self.assertEqual(config.json()["elia_playback_speed_limits"], {"min": .5, "max": 1.5})
+        self.assertEqual(config.json()["elia_presentation_freedom_limits"], {"min": 0, "max": 1})
         self.assertEqual(
             config.json()["allowed_origins"],
             ["https://portal.example", "http://localhost:3000"],
@@ -142,7 +144,7 @@ class PoseApiTests(unittest.TestCase):
         self.assertEqual(config.json()["avatars"], ["asuna", "lia", "elia"])
         self.assertEqual(config.json()["default_avatar"], "lia")
         self.assertEqual(
-            config.json()["app_version"], "2026.10.29-elia.34"
+            config.json()["app_version"], "2026.10.30-elia.35"
         )
         self.assertEqual(config.headers["cache-control"], "no-store")
 
@@ -150,6 +152,21 @@ class PoseApiTests(unittest.TestCase):
         self.assertEqual(widget_script.status_code, 200)
         self.assertIn('case "neotalk:replay"', widget_script.text)
         self.assertIn('capabilities: ["sign", "replay"', widget_script.text)
+
+    def test_widget_elia_playback_override_is_public_numeric_and_not_cached(self) -> None:
+        with patch("app.main.settings", replace(app_settings, elia_playback_speed=1.5)):
+            config = self.client.get("/api/v1/widget/config")
+        self.assertEqual(config.status_code, 200)
+        self.assertEqual(config.json()["elia_playback_speed"], 1.5)
+        self.assertEqual(config.headers["cache-control"], "no-store")
+
+    def test_widget_elia_freedom_override_is_numeric_independent_and_not_cached(self) -> None:
+        with patch("app.main.settings", replace(app_settings, elia_playback_speed=1.5, elia_presentation_freedom=.5)):
+            config = self.client.get("/api/v1/widget/config")
+        self.assertEqual(config.status_code, 200)
+        self.assertEqual(config.json()["elia_presentation_freedom"], .5)
+        self.assertEqual(config.json()["elia_playback_speed"], 1.5)
+        self.assertEqual(config.headers["cache-control"], "no-store")
 
     def test_webgl_builds_are_compressed_and_cached_by_version(self) -> None:
         build = self.client.get(

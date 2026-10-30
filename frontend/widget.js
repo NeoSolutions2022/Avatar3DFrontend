@@ -34,6 +34,12 @@ const state = {
   prefetchedPoses: new Map(),
   prefetchGeneration: 0,
   nativePlayback: false,
+  eliaPlaybackSpeed: null,
+  effectiveEliaPlaybackSpeed: null,
+  canSetEliaPlaybackSpeed: false,
+  eliaPresentationFreedom: null,
+  effectiveEliaPresentationFreedom: null,
+  canSetEliaPresentationFreedom: false,
   playbackContext: null,
   poseFiles: new Map(),
   poseFileTasks: new Map(),
@@ -167,9 +173,55 @@ function sendUnity(method, value) {
   return true;
 }
 
+function normalizeEliaPlaybackSpeed(value) {
+  if (!["number", "string"].includes(typeof value) || (typeof value === "string" && !value.trim())) return null;
+  const speed = Number(value);
+  return Number.isFinite(speed) ? Math.min(1.5, Math.max(0.5, speed)) : null;
+}
+
+function applyEliaPlaybackSpeed(manifest) {
+  const capability = manifest?.presentationPlaybackSpeed;
+  state.canSetEliaPlaybackSpeed = state.avatar === "elia" && capability?.min === 0.5 && capability?.max === 1.5;
+  state.effectiveEliaPlaybackSpeed = null;
+  const speed = normalizeEliaPlaybackSpeed(state.eliaPlaybackSpeed);
+  if (!state.unity || state.avatar !== "elia" || speed === null) return false;
+  if (!state.canSetEliaPlaybackSpeed) {
+    emitStatus("playback_speed_unsupported", { requestedPlaybackSpeed: speed });
+    return false;
+  }
+  // This Unity method takes float. sendUnity deliberately stringifies its
+  // arguments for the other bridge methods, so use a NUMBER here instead.
+  state.unity.SendMessage(state.runtimeObject, "SetEliaLecturePlaybackSpeed", speed);
+  state.effectiveEliaPlaybackSpeed = speed;
+  return true;
+}
+
+function normalizeEliaPresentationFreedom(value) {
+  if (!["number", "string"].includes(typeof value) || (typeof value === "string" && !value.trim())) return null;
+  const freedom = Number(value);
+  return Number.isFinite(freedom) ? Math.min(1, Math.max(0, freedom)) : null;
+}
+
+function applyEliaPresentationFreedom(manifest) {
+  const capability = manifest?.presentationFreedom;
+  state.canSetEliaPresentationFreedom = state.avatar === "elia" && capability?.min === 0 && capability?.max === 1;
+  state.effectiveEliaPresentationFreedom = null;
+  const freedom = normalizeEliaPresentationFreedom(state.eliaPresentationFreedom);
+  if (!state.unity || state.avatar !== "elia" || freedom === null) return false;
+  if (!state.canSetEliaPresentationFreedom) {
+    emitStatus("presentation_freedom_unsupported", { requestedPresentationFreedom: freedom });
+    return false;
+  }
+  // The Unity setter takes float, not the string used by the legacy helpers.
+  // Apply once before preview/playback; never rewrite freedom for each pose.
+  state.unity.SendMessage(state.runtimeObject, "SetEliaLectureFreedom", freedom);
+  state.effectiveEliaPresentationFreedom = freedom;
+  return true;
+}
+
 function runtimeAssetUrl(value, runtimeBase, manifest) {
   const url = new URL(value, runtimeBase);
-  url.searchParams.set("build", manifest.builtAtUtc || "20261029-elia34");
+  url.searchParams.set("build", manifest.builtAtUtc || "20261030-elia35");
   return url.href;
 }
 
@@ -228,6 +280,10 @@ async function unloadRuntime() {
     state.loaderScript = null;
   }
   state.nativePlayback = false;
+  state.canSetEliaPlaybackSpeed = false;
+  state.effectiveEliaPlaybackSpeed = null;
+  state.canSetEliaPresentationFreedom = false;
+  state.effectiveEliaPresentationFreedom = null;
 }
 
 async function initializeAvatar(avatarId, resumePose = state.activePose) {
@@ -285,7 +341,7 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
       streamingAssetsUrl: new URL("StreamingAssets", runtimeBase).href,
       companyName: "NeoTalk",
       productName: `NeoTalk ${avatar.name}`,
-      productVersion: "2026.10.29-elia.34",
+      productVersion: "2026.10.30-elia.35",
       matchWebGLToCanvasSize: true,
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, avatarId === "asuna" ? 2 : 2.25),
     },
@@ -298,6 +354,8 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
 
   state.unity = instance;
+  applyEliaPlaybackSpeed(manifest);
+  applyEliaPresentationFreedom(manifest);
   elements.appVersion.title = `${avatar.name} WebGL ${manifest.builtAtUtc || "sem data"}`;
   sendUnity("SetBackgroundColor", state.background);
   sendUnity("SetCameraZoom", state.zoom.toFixed(2));
@@ -320,9 +378,11 @@ async function initializeAvatar(avatarId, resumePose = state.activePose) {
   }
   emitStatus("ready");
   postToParent("neotalk:ready", {
-    version: "2026.10.29-elia.34",
+    version: "2026.10.30-elia.35",
     avatars: [...supportedAvatars],
-    capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "presentation-playlist", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : [])],
+    capabilities: ["sign", "replay", "shared-pose", "prefetch", "prefetch-pose", "presentation-playlist", "avatar", "zoom", "loop", "background", "playback", ...(state.nativePlayback ? ["native-playback-progress"] : []), ...(state.canSetEliaPlaybackSpeed ? ["presentation-playback-speed"] : []), ...(state.canSetEliaPresentationFreedom ? ["presentation-freedom"] : [])],
+    presentationPlaybackSpeed: state.effectiveEliaPlaybackSpeed,
+    presentationFreedom: state.effectiveEliaPresentationFreedom,
   });
 
   if (resumePose) await loadPose(resumePose);
@@ -782,6 +842,8 @@ async function bootstrap() {
     if (!configResponse.ok) throw new Error("Configuração do widget indisponível.");
     const config = await configResponse.json();
     state.allowedOrigins = Array.isArray(config.allowed_origins) ? config.allowed_origins : [];
+    state.eliaPlaybackSpeed = normalizeEliaPlaybackSpeed(config.elia_playback_speed);
+    state.eliaPresentationFreedom = normalizeEliaPresentationFreedom(config.elia_presentation_freedom);
     const referrerOrigin = normalizeOrigin(document.referrer);
     if (originAllowed(referrerOrigin)) state.trustedParentOrigin = referrerOrigin;
 

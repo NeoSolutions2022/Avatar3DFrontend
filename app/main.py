@@ -171,7 +171,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "api_version": "2.1.0",
-        "app_version": "2026.10.29-elia.34",
+        "app_version": "2026.10.30-elia.35",
         "pose_pipeline": "original-payload-pass-through",
         "webgl_ready": webgl_ready,
         "avatars": ready_avatars,
@@ -187,7 +187,11 @@ def widget_config() -> JSONResponse:
             "avatars": ["asuna", "lia", "elia"],
             "default_avatar": "lia",
             "max_phrase_length": 500,
-            "app_version": "2026.10.29-elia.34",
+            "elia_playback_speed": settings.elia_playback_speed,
+            "elia_playback_speed_limits": {"min": 0.5, "max": 1.5},
+            "elia_presentation_freedom": settings.elia_presentation_freedom,
+            "elia_presentation_freedom_limits": {"min": 0.0, "max": 1.0},
+            "app_version": "2026.10.30-elia.35",
         },
         headers={"Cache-Control": "no-store"},
     )

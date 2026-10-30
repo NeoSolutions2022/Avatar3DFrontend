@@ -37,6 +37,72 @@ publicar em producao.
 
 ## 2. Codigo pronto para o site externo
 
+### Velocidade de execucao da ELIA no modo apresentacao
+
+No EasyPanel/Docker, uma variavel opcional permite acelerar sem recompilar Unity:
+
+```env
+AVATAR3D_ELIA_PLAYBACK_SPEED=1.5
+```
+
+Reinicie/reimplante o servico depois da mudanca e recarregue o iframe. A
+configuracao e lida no servidor e entregue por `/api/v1/widget/config` sem cache;
+nao e uma variavelVite embutida no JavaScript. O widget reaplica na inicializacao
+da ELIA e nas trocas de avatar. Nao altera LIA/Asuna, fonte `.pose`, FPS nominal,
+amortecimento, liberdade, IDs de reproducao ou preparacaoPPC.
+
+- Vazio/ausente: preserva a velocidade salva no Unity, atualmente1.2.
+-1.5:50%acima de1x;25%mais rapido que1.2. Tempo de execucao cai20%vs1.2.
+- Faixa aceita pelo runtime atual0.5..1.5; valores finitos fora disso sao
+  limitados. `2`resulta1.5, nao2x. Invalidos/NaN/Infinity sao ignorados.
+- Precisa desta atualizacao do backend/widget/manifesto. Os binariosELIA.34
+  ja contem `SetEliaLecturePlaybackSpeed(float)`; nenhum WebGLnovo foi gerado.
+- Builds/manifestos sem a capacidade declarada nao recebem o comando: widget
+  emite status`playback_speed_unsupported`, sem quebrar a animacao.
+- Funciona somente se o ModoPalestra/Evento estiver ativo na ELIA. Nao acelerar
+  preparacao/loading nem prometer igual qualidade visual na taxa maior.
+
+Para voltar, remova a variavel e reinicie/recarregue o widget, ou use1.2. A
+configuracao e publica e nao deve conter credenciais. Nenhum deploy/push e feito
+automaticamente ao editar esses arquivos locais.
+
+### Liberdade visual da ELIA no Evento Ultra
+
+Controle independente da velocidade, para relaxar moderadamente os trilhos dos
+bracos/maos, o orcamento do punho e a articulacao dos dedos:
+
+```env
+AVATAR3D_ELIA_PLAYBACK_SPEED=1.5
+AVATAR3D_ELIA_PRESENTATION_FREEDOM=0.5
+```
+
+- Faixa0..1. Comece com0.5: e o candidato intermediario avaliado;1 e o maximo
+  experimental, nao "100%livre" nem garantia de anatomia/contatos sem anomalias.
+-0 restaura o envelope anterior; vazio/ausente mantem o valor salvo no Unity
+  (atualmente0). Invalidos/NaN/Infinity sao ignorados e finitos fora da faixa
+  sao limitados. Use ponto decimal, nao virgula.
+- Atua em bracos, punhos, maos e dedos JUNTOS; nao e controle exclusivo dos dedos.
+  Requer Evento Ultra ativo. Nao muda velocidade, PPC, IDs nem os `.pose`.
+- **Diferente da velocidade, requer uma nova buildWebGL UMA vez** com
+  `SetEliaLectureFreedom(float)`. A.34atualNAOpossui esse comando. O gerador de
+  manifestosUnity foi atualizado para declarar `presentationFreedom:{min:0,max:1}`
+  somente nas NOVAS buildsELIA. Publique build e manifesto correspondentes juntos;
+  nunca acrescente a capacidade manualmente ao manifesto da.34antiga.
+- Sem capacidade compativel, o widget emite `presentation_freedom_unsupported`,
+  nao envia o metodo inexistente e segue reproduzindo normalmente.
+- Apos atualizar backend/widget e publicar a build compativel, mude a variavel,
+  reinicie/reimplante o servico e recarregue o iframe. Proximos ajustes de valor
+  nao exigem recompilar Unity. E variavel do SERVIDOR, nao Vite nem do site pai.
+- Configuracao por `/api/v1/widget/config`semcache; enviada numericamente ao
+  Unity uma vez na inicializacao, antes do preview/primeiro sinal, e reaplicada
+  nas trocas de avatar. Nao e rampa de ajuste ao vivo no meio do sinal.
+- `neotalk:ready`pode anunciar a capacidade`presentation-freedom`; seu campo
+  `presentationFreedom`indica o ultimo valor ENVIADO (ou null), nao ACK nativo
+  de efeito visual. Nao altera o contrato de confirmacao de reproducao.
+
+Implementado/testado localmente; nenhuma nova build/publicacao ou validacao no
+navegador foi feita automaticamente por esse ajuste de configuracao.
+
 HTML:
 
 ```html
